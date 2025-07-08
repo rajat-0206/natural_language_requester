@@ -12,7 +12,97 @@ load_dotenv()
 API_SCHEMA = None
 print_raw_response = True
 CLAUDE_API_KEY = os.getenv('CLAUDE_API_KEY')
+MODEL_TO_USE = "CLAUDE"
 CLAUDE_API_HOST = 'https://api.anthropic.com/v1/messages'
+
+NEXT_BEST_SUGGESTIONS = {
+  "Event": {
+    "next": [
+      "Broadcast",
+      "AgendaItem",
+      "DiscussionGroup",
+      "Track",
+      "Booth",
+      "Resource",
+      "MedialiveRtmpInput",
+      "EventEmailTemplate",
+      "EmailConfig",
+      "EventWidget",
+      "TicketType",
+      "EventAppModerators",
+      "EventDefaultRole",
+      "EventUsers",
+      "EventRole"
+    ]
+  },
+  "Broadcast": {
+    "next": [
+      "Resource",
+      "TrackItems",
+      "SlideAsset",
+      "VideoAsset",
+      "Staff"
+    ]
+  },
+  "Track": {
+    "next": [
+      "TrackItems"
+    ]
+  },
+  "DiscussionGroup": {
+    "next": [
+      "Booth"
+    ]
+  },
+  "Booth": {
+    "next": [
+      "Resource"
+    ]
+  },
+  "AgendaItem": {
+    "next": []
+  },
+  "TrackItems": {
+    "next": []
+  },
+  "Resource": {
+    "next": []
+  },
+  "EmailConfig": {
+    "next": []
+  },
+  "EventEmailTemplate": {
+    "next": [
+      "EmailConfig"
+    ]
+  },
+  "EventUsers": {
+    "next": [
+      "EventRole"
+    ]
+  },
+  "EventRole": {
+    "next": []
+  },
+  "EventWidget": {
+    "next": []
+  },
+  "MedialiveRtmpInput": {
+    "next": [
+      "Broadcast"
+    ]
+  },
+  "TicketType": {
+    "next": []
+  },
+  "EventAppModerators": {
+    "next": []
+  },
+  "EventDefaultRole": {
+    "next": []
+  }
+}
+
 
 def get_current_time_for_prompt():
     """
@@ -22,6 +112,16 @@ def get_current_time_for_prompt():
     tz = pytz.timezone('Asia/Kolkata') 
     now = datetime.now(tz)
     return now.strftime('%Y-%m-%d %H:%M:%S %Z%z')
+
+def call_model(prompt):
+    print("MODEL_TO_USE", MODEL_TO_USE)
+    if MODEL_TO_USE == "CLAUDE":
+        return call_claude(prompt)
+    elif MODEL_TO_USE == "OPENAI":
+        return call_openai(prompt)
+    else:
+        return call_ollama(prompt)
+    
 
 def call_claude(prompt):
     """Calls the Claude API with the given prompt."""
@@ -41,7 +141,7 @@ def call_claude(prompt):
                 "anthropic-version": "2023-06-01"
             },
             json={
-                "model": "claude-3-5-sonnet-20241022",
+                "model": "claude-opus-4-20250514",
                 "max_tokens": 1024,
                 "messages": [
                     {
@@ -64,6 +164,7 @@ def call_claude(prompt):
 
 def call_ollama(prompt):
     """Calls the Ollama API with the given prompt."""
+    print("Calling Ollama")
     try:
         response = requests.post(
             "http://localhost:11434/api/generate",
@@ -144,7 +245,7 @@ Respond in JSON:
   "details": "..."
 }}
 """
-    response = call_claude(prompt)
+    response = call_model(prompt)
     try:
         # Parse the JSON from the response
         if "```json" in response:
@@ -164,19 +265,22 @@ def sanitize_api_url(path):
     Sanitize the API path {path} to convert any random value to correct type like tomorrow becomes actual data. Only return the sanitized text.
     If path is already sanitized, return the same path.
     """
-    response = call_claude(prompt)
+    response = call_model(prompt)
     return response
 
 def sanitize_api_params(params):
     '''
     Sanitize the API parameters to convert any random value to correct type like tomorrow becomes actual data
     '''
+    print("args", params)
     prompt = f"""
     Sanitize the API parameters {params} to convert any random value to correct type like tomorrow becomes actual data. Return the sanitized parameters in JSON format.
     DO NOT ADD ANYTHING ELSE TO THE RESPONSE.
     If parameters are already sanitized, return the same parameters.
+    DO NOT ADD ````json to the response. It should be a valid JSON string.
     """
-    response = call_claude(prompt)
+    response = call_model(prompt)
+    print("response", response)
     return response
 
 def generate_curl_command(api, params, path):
@@ -256,3 +360,66 @@ def make_api_call(method, api_path, payload=None, headers=None):
     except json.JSONDecodeError as e:
         print(f"Error parsing API response: {e}")
         return None, None 
+    
+def suggest_next_best_item(current_item, user_query):
+    '''
+    Suggest the next best item to create based on the current item and user query
+    '''
+    try:
+      print("action", current_item)
+      print("user_query", user_query)
+      prompt = f"""
+      Suggest the next best item to create based on the current item {current_item} and user query {user_query}.
+      We need 4 suggestions which user can do once current item is created.
+      For eg:
+      If initial user query was: Create event at 5pm,
+      Then next best items to create are:
+      - Create a new broadcast
+      - Add speakers to the event
+      - Add attendees to the event
+      - Add a new staff
+
+
+      1. Return json array with 4 suggestions. DO NOT ADD ANY TEXT. It should be a valid JSON string.
+      {{
+          "suggestions": [
+              "suggestion1",
+              "suggestion2",
+              "suggestion3",
+              "suggestion4"
+          ]
+      }}
+      """
+      response = call_model(prompt)
+      # parse the response to json, remove any ```json to the response. It should be a valid JSON string.
+      response = response.replace("```json", "").replace("```", "")
+      return json.loads(response)
+    except Exception as e:
+        print("Error in suggest_next_best_item", e)
+        return None
+
+def call_openai(prompt):
+    '''
+    Call the OpenAI API with the given prompt
+    '''
+    try:
+        response = requests.post(
+            "https://api.openai.com/v1/responses",
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {os.getenv('OPENAI_API_KEY')}"
+            },
+            json={
+                "model": "gpt-4.1",
+                "input": prompt
+            }
+        )
+        response.raise_for_status()
+        output = response.json()["output"]
+        print("output", output)
+        content = output[0]["content"][0]["text"]
+        print("content", content)
+        return content
+    except requests.exceptions.RequestException as e:
+        print("Error in call_openai", e)
+        return None

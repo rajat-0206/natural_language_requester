@@ -9,15 +9,17 @@ from api_requester import (
     save_index_to_cache, 
     embed
 )
+import time
 from utils import (
     sanitize_api_url,
     sanitize_api_params,
-    call_claude, 
+    call_model, 
     parse_response, 
     extract_action_data,
     handle_get_request_params,
     generate_curl_command,
-    make_api_call
+    make_api_call,
+    suggest_next_best_item
 )
 
 app = Flask(__name__)
@@ -62,6 +64,15 @@ def handle_connect():
     """Handle client connection."""
     print(f"Client connected: {request.sid}")
     emit('status', {'message': 'Connected to API Requester Server', 'status': 'connected'})
+    # suggest initial suggestions like: Create event for tomorrow 5pm with title hello world
+    next_best_items = {
+        "suggestions": [
+            "Create event for tomorrow 5pm with title hello world",
+            "Get a users magiclink",
+            "Get all event users for an event with id 123",
+        ]
+    }
+    emit('next_best_items', next_best_items)
 
 @socketio.on('disconnect')
 def handle_disconnect():
@@ -93,6 +104,7 @@ def handle_api_request(data):
             search_text = user_input  # fallback
 
         emit('status', {'message': 'Finding matching API...', 'status': 'searching'})
+        time.sleep(0.5)
         
         # Find the best matching API using semantic search
         query_emb = embed([search_text])
@@ -102,6 +114,7 @@ def handle_api_request(data):
         print("Matched API: ", matched_api)
         emit('status', {'message': f'Found API: {matched_api["path"]}', 'status': 'found_api'})
         
+        time.sleep(0.5)
         # Use Claude to fill in the details
         prompt = build_prompt(
             user_input, 
@@ -112,7 +125,7 @@ def handle_api_request(data):
         )
         
         emit('status', {'message': 'Generating API payload...', 'status': 'generating'})
-        llm_response = call_claude(prompt)
+        llm_response = call_model(prompt)
         
         action, params, api = parse_response(llm_response)
 
@@ -141,12 +154,15 @@ def handle_api_request(data):
                 return
             
             # Generate curl command
-            sanitized_path = sanitize_api_url(matched_api['path'])
-            sanitized_params = json.loads(sanitize_api_params(params))
-            final_response = get_final_response(action, sanitized_path, matched_api['method'], sanitized_params)
+            final_response = get_final_response(action, matched_api['path'], matched_api['method'], params)
             
             # Send final response
             emit('api_response', final_response)
+
+            time.sleep(1)
+            next_best_items = suggest_next_best_item(action, user_input)
+            if next_best_items:
+                emit('next_best_items', next_best_items)
             
         elif action == 'more_info_needed':
             emit('error', {'message': f'More information needed: {params.get("text", "No details provided.")}'})
@@ -176,6 +192,10 @@ def handle_missing_fields(data):
         final_response = get_final_response("API Request", sanitized_path, matched_api['method'], sanitized_params)
         # Send final response
         emit('api_response', final_response)
+        time.sleep(1)
+        next_best_items = suggest_next_best_item(action, user_input)
+        if next_best_items:
+            emit('next_best_items', next_best_items)
         
     except Exception as e:
         print(f"Error handling missing fields: {e}")

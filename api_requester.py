@@ -47,9 +47,8 @@ Your task is to analyze the user's request and the matched API endpoint to gener
 **INSTRUCTIONS:**
 1. Analyze the user's request and extract all necessary information.
 2. Fill in the API path parameters if required (replace {{param}} with actual values).
-3. Generate a valid request payload based on the API's requestBody schema.
-4. If a required parameter is missing and cannot be inferred, use "REQUIRED_FIELD_MISSING".
-5. If request method is GET only add limit and offset parameters and take default values as limit=10 and offset=0
+3. If a required parameter is missing and cannot be inferred, use "REQUIRED_FIELD_MISSING".
+4. If request method is GET only add limit and offset parameters and take default values as limit=10 and offset=0
 5. For dates and times:
    - Convert relative times (e.g., "tomorrow", "next week") to actual dates
    - Use the current timezone (Asia/Kolkata) if not specified
@@ -73,20 +72,6 @@ Response: {{
     "title": "Team Sync",
     "start_time": "2025-06-28T15:00:00",
     "end_time": "2025-06-28T15:45:00",
-    "timezone": "Asia/Kolkata",
-    "organization": "REQUIRED_FIELD_MISSING",
-    "owner": "REQUIRED_FIELD_MISSING"
-  }}
-}}
----
-User: Create an event of 1 hour for tomorrow 5pm IST with title "AI in todays world"
-Response: {{
-  "action": "Create event",
-  "api": "/event/",
-  "payload": {{
-    "title": "AI in todays world",
-    "start_time": "{ (datetime.now(pytz.timezone('Asia/Kolkata')) + timedelta(days=1)).strftime('%Y-%m-%d') }T17:00:00",
-    "end_time": "{ (datetime.now(pytz.timezone('Asia/Kolkata')) + timedelta(days=1)).strftime('%Y-%m-%d') }T18:00:00",
     "timezone": "Asia/Kolkata",
     "organization": "REQUIRED_FIELD_MISSING",
     "owner": "REQUIRED_FIELD_MISSING"
@@ -182,7 +167,7 @@ def main():
                 params = updated_params
             
             sanitized_path = sanitize_api_url(matched_api['path'])
-            sanitized_params = json.loads(sanitize_api_params(updated_params))
+            sanitized_params = json.loads(sanitize_api_params(params))
             curl_command = generate_curl_command(matched_api, sanitized_params, sanitized_path)
             
             print(f"\n➡️ Action: {action}")
