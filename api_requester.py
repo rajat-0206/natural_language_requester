@@ -1,13 +1,18 @@
 import json
 import requests
 import os
+from dotenv import load_dotenv
 from datetime import datetime, timedelta
 import pytz
 from get_top_apis import build_index, load_cached_index, save_index_to_cache, embed
 
+load_dotenv()
+
 # Global variable for the API schema
 API_SCHEMA = None
 print_raw_response = True
+CLAUDE_API_KEY = os.getenv('CLAUDE_API_KEY')
+CLAUDE_API_HOST = 'https://api.anthropic.com/v1/messages'
 
 def get_current_time_for_prompt():
     """
@@ -56,6 +61,8 @@ Your task is to analyze the user's request and the matched API endpoint to gener
    - action: The action being performed
    - api: The complete API path with parameters filled
    - payload: The request payload
+7. PLEASE DO NOT RETURN ANYTHING OTHER THAN THE JSON OBJECT. IF YOU WANT TO PASS A NOTE, ADD IT IN JSON OBJECT AS "note": "..." SINCE 
+WE ARE USING THIS JSON OBJECT TO PARSE RESPONSE AND DISPLAY IT TO THE USER.
 
 **EXAMPLES:**
 ---
@@ -103,6 +110,45 @@ User: {user_input}
 Response:"""
 
     return prompt.strip()
+
+def call_claude(prompt):
+    """Calls the Claude API with the given prompt."""
+    try:
+        # Get API key from environment variable
+        api_key = os.getenv('CLAUDE_API_KEY')
+        if not api_key:
+            print("Error: CLAUDE_API_KEY environment variable not set.")
+            print("Please set your Claude API key: export CLAUDE_API_KEY='your-api-key-here'")
+            return None
+        
+        response = requests.post(
+            CLAUDE_API_HOST,
+            headers={
+                "Content-Type": "application/json",
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01"
+            },
+            json={
+                "model": "claude-3-5-sonnet-20241022",
+                "max_tokens": 1024,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ]
+            }
+        )
+        response.raise_for_status()
+        return response.json()["content"][0]["text"]
+    except requests.exceptions.RequestException as e:
+        print(f"Error calling Claude API: {e}")
+        print("Please ensure you have a valid API key and internet connection.")
+        return None
+    except KeyError as e:
+        print(f"Error parsing Claude API response: {e}")
+        print("Unexpected response format from Claude API.")
+        return None
 
 def call_ollama(prompt):
     """Calls the Ollama API with the given prompt."""
@@ -169,7 +215,7 @@ def collect_missing_fields(params):
     updated_params.update(missing_fields)
     return updated_params
 
-def extract_action_data_with_mistral(user_query):
+def extract_action_data(user_query):
     prompt = f"""
 You are an expert at analyzing user requests for APIs. Given the following user query, extract:
 - action: the main intent or verb (e.g., get, create, delete)
@@ -185,7 +231,7 @@ Respond in JSON:
   "details": "..."
 }}
 """
-    response = call_ollama(prompt)
+    response = call_claude(prompt)
     try:
         # Parse the JSON from the response
         if "```json" in response:
@@ -194,7 +240,7 @@ Respond in JSON:
             json_str = response.strip()
         return json.loads(json_str)
     except Exception as e:
-        print("Failed to parse Mistral extraction:", e)
+        print("Failed to parse Claude extraction:", e)
         return None
 
 def main():
@@ -227,7 +273,7 @@ def main():
             continue
 
         # Extract action/data/details using Mistral
-        extracted = extract_action_data_with_mistral(user_input)
+        extracted = extract_action_data(user_input)
         print("Improved user query is", extracted)
         if extracted:
             search_text = f"{extracted.get('action', '')} {extracted.get('data', '')}".strip()
@@ -238,15 +284,15 @@ def main():
 
         # First, find the best matching API using semantic search (use extracted action+data)
         query_emb = embed([search_text])
-        _, top_ids = index.search(query_emb, 1)  # Get only the best match
+        _, top_ids = index.search(query_emb, 1)  # Get top 1 match
         matched_api = metadata[top_ids[0][0]]
 
         print("Matched API: ", matched_api)
         print("(Search text used for embedding:)", search_text)
         
-        # Then use Ollama to fill in the details (use full user_input)
+        # Then use Claude to fill in the details (use full user_input)
         prompt = build_prompt(user_input, api_path=matched_api["path"], api_method=matched_api["method"], api_parameters=matched_api["parameters"], api_request_body=matched_api["requestBody"])
-        llm_response = call_ollama(prompt)
+        llm_response = call_claude(prompt)
         
         action, params = parse_response(llm_response)
 
