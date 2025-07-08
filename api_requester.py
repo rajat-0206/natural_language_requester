@@ -7,6 +7,8 @@ from utils import (
     get_current_time_for_prompt,
     call_claude,
     parse_response,
+    sanitize_api_url,
+    sanitize_api_params,
     collect_missing_fields,
     extract_action_data,
     handle_get_request_params,
@@ -179,8 +181,9 @@ def main():
                     continue
                 params = updated_params
             
-            # Generate curl command
-            curl_command = generate_curl_command(matched_api, params)
+            sanitized_path = sanitize_api_url(matched_api['path'])
+            sanitized_params = json.loads(sanitize_api_params(updated_params))
+            curl_command = generate_curl_command(matched_api, sanitized_params, sanitized_path)
             
             print(f"\n➡️ Action: {action}")
             print(f"📦 API: {api}")

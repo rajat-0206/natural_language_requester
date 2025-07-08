@@ -143,18 +143,10 @@ def handle_api_request(data):
             # Generate curl command
             sanitized_path = sanitize_api_url(matched_api['path'])
             sanitized_params = json.loads(sanitize_api_params(params))
-
-            curl_command = generate_curl_command(matched_api, sanitized_params, sanitized_path)
+            final_response = get_final_response(action, sanitized_path, matched_api['method'], sanitized_params)
             
             # Send final response
-            emit('api_response', {
-                'action': action,
-                'api_path': sanitized_path,
-                'method': matched_api['method'],
-                'payload': sanitized_params,
-                'curl_command': curl_command,
-                'status': 'success'
-            })
+            emit('api_response', final_response)
             
         elif action == 'more_info_needed':
             emit('error', {'message': f'More information needed: {params.get("text", "No details provided.")}'})
@@ -181,17 +173,9 @@ def handle_missing_fields(data):
         # Generate curl command
         sanitized_path = sanitize_api_url(matched_api['path'])
         sanitized_params = json.loads(sanitize_api_params(updated_params))
-        curl_command = generate_curl_command(matched_api, sanitized_params, sanitized_path)
-        
+        final_response = get_final_response("API Request", sanitized_path, matched_api['method'], sanitized_params)
         # Send final response
-        emit('api_response', {
-            'action': 'API Request',
-            'api_path': sanitized_path,
-            'method': matched_api['method'],
-            'payload': sanitized_params,
-            'curl_command': curl_command,
-            'status': 'success'
-        })
+        emit('api_response', final_response)
         
     except Exception as e:
         print(f"Error handling missing fields: {e}")
@@ -219,6 +203,16 @@ def handle_make_api_call(data):
     except Exception as e:
         print(f"Error making API call: {e}")
         emit('error', {'message': f'An error occurred: {str(e)}'})
+
+def get_final_response(action, api_path, method, payload):
+    return {
+            'action': action,
+            'api_path': api_path,
+            'method': method,
+            'payload': payload,
+            'status': 'success'
+        }
+
 
 if __name__ == '__main__':
     # Initialize the API system
