@@ -1,20 +1,23 @@
 from flask import Flask, render_template, request
 from flask_socketio import SocketIO, emit
 import json
-import urllib.parse
-import os
-from datetime import datetime, timedelta
-import pytz
+import traceback
 from api_requester import (
     build_prompt, 
-    call_claude, 
-    parse_response, 
-    collect_missing_fields,
-    extract_action_data,
     build_index, 
     load_cached_index, 
     save_index_to_cache, 
     embed
+)
+from utils import (
+    sanitize_api_url,
+    sanitize_api_params,
+    call_claude, 
+    parse_response, 
+    extract_action_data,
+    handle_get_request_params,
+    generate_curl_command,
+    make_api_call
 )
 
 app = Flask(__name__)
@@ -114,16 +117,7 @@ def handle_api_request(data):
         action, params, api = parse_response(llm_response)
 
         if matched_api["method"] == "GET":
-            parsed_url = urllib.parse.urlparse(api)
-            query_params = urllib.parse.parse_qs(parsed_url.query)
-            missing_fields = []
-            for key, value in query_params.items():
-                if value[0] == "REQUIRED_FIELD_MISSING":
-                    missing_fields.append(key)
-                    query_params[key] = value[0]
-                else:
-                    query_params[key] = value[0]
-                    
+            api, params, missing_fields = handle_get_request_params(api, params)
             if missing_fields:
                 emit('missing_fields', {
                     'message': 'Some required fields are missing',
@@ -147,14 +141,17 @@ def handle_api_request(data):
                 return
             
             # Generate curl command
-            curl_command = generate_curl_command(matched_api, params)
+            sanitized_path = sanitize_api_url(matched_api['path'])
+            sanitized_params = json.loads(sanitize_api_params(params))
+
+            curl_command = generate_curl_command(matched_api, sanitized_params, sanitized_path)
             
             # Send final response
             emit('api_response', {
                 'action': action,
-                'api_path': matched_api['path'],
+                'api_path': sanitized_path,
                 'method': matched_api['method'],
-                'payload': params,
+                'payload': sanitized_params,
                 'curl_command': curl_command,
                 'status': 'success'
             })
@@ -166,6 +163,7 @@ def handle_api_request(data):
             
     except Exception as e:
         print(f"Error processing request: {e}")
+        print(traceback.format_exc())
         emit('error', {'message': f'An error occurred: {str(e)}'})
 
 @socketio.on('provide_missing_fields')
@@ -181,14 +179,16 @@ def handle_missing_fields(data):
         updated_params.update(provided_fields)
         
         # Generate curl command
-        curl_command = generate_curl_command(matched_api, updated_params)
+        sanitized_path = sanitize_api_url(matched_api['path'])
+        sanitized_params = json.loads(sanitize_api_params(updated_params))
+        curl_command = generate_curl_command(matched_api, sanitized_params, sanitized_path)
         
         # Send final response
         emit('api_response', {
             'action': 'API Request',
-            'api_path': matched_api['path'],
+            'api_path': sanitized_path,
             'method': matched_api['method'],
-            'payload': updated_params,
+            'payload': sanitized_params,
             'curl_command': curl_command,
             'status': 'success'
         })
@@ -198,81 +198,27 @@ def handle_missing_fields(data):
         emit('error', {'message': f'An error occurred: {str(e)}'})
 
 @socketio.on('make_api_call')
-def make_api_call(data):
+def handle_make_api_call(data):
     '''
     Make an API call to the API server
     using requests module
     '''
     try:
-        response = requests.request(data['method'], data['api_path'], json=data['payload'])
-        emit('api_response', {
-            'response': response.json(),
-            'status': 'success'
-        })
+        response_data, status_code = make_api_call(
+            data['method'], 
+            data['api_path'], 
+            data.get('payload')
+        )
+        if response_data:
+            emit('api_response', {
+                'response': response_data,
+                'status': 'success'
+            })
+        else:
+            emit('error', {'message': 'Failed to make API call'})
     except Exception as e:
         print(f"Error making API call: {e}")
         emit('error', {'message': f'An error occurred: {str(e)}'})
-
-def sanitize_api_url(path):
-    '''
-    Sanitize the API path and parameters to convert any random value to correct type like tomorrow becomes actual data
-    '''
-    prompt = f"""
-    Sanitize the API path {path} to convert any random value to correct type like tomorrow becomes actual data. Only return the sanitized text.
-    If path is already sanitized, return the same path.
-    """
-    response = call_claude(prompt)
-    return response
-
-def sanitize_api_params(params):
-    '''
-    Sanitize the API parameters to convert any random value to correct type like tomorrow becomes actual data
-    '''
-    prompt = f"""
-    Sanitize the API parameters {params} to convert any random value to correct type like tomorrow becomes actual data. Return the sanitized parameters in JSON format.
-    DO NOT ADD ANYTHING ELSE TO THE RESPONSE.
-    If parameters are already sanitized, return the same parameters.
-    """
-    response = call_claude(prompt)
-    return response
-
-def generate_curl_command(api, params):
-    """Generate a curl command from the API and parameters."""
-    # use llm to again sanitize the api and params to convert any random value to correct type like tomorrow becomes actual data
-    method = api['method'].upper()
-    path = api['path']
-
-    sanitized_path = sanitize_api_url(path)
-    sanitized_params = json.loads(sanitize_api_params(params))
-
-    print("sanitized_path", sanitized_path)
-    print("sanitized_params", sanitized_params)
-
-    
-    # Replace path parameters
-    for param_name, param_value in sanitized_params.items():
-        if f"{{{param_name}}}" in sanitized_path:
-            sanitized_path = sanitized_path.replace(f"{{{param_name}}}", str(param_value))
-    
-    curl_parts = [f"curl -X {method}"]
-    
-    # Add headers
-    curl_parts.append('-H "Content-Type: application/json"')
-    curl_parts.append('-H "Authorization: Bearer YOUR_API_KEY"')
-    
-    # Add URL
-    base_url = "https://api.example.com"  # Replace with your actual base URL
-    url = f"{base_url}{sanitized_path}"
-    curl_parts.append(f'"{url}"')
-    
-    # Add body for non-GET requests
-    if method != "GET" and sanitized_params:
-        # Remove path parameters from body
-        body_params = {k: v for k, v in sanitized_params.items() if f"{{{k}}}" not in sanitized_path}
-        if body_params:
-            curl_parts.append(f"-d '{json.dumps(body_params)}'")
-    
-    return " ".join(curl_parts)
 
 if __name__ == '__main__':
     # Initialize the API system
