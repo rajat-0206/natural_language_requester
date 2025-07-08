@@ -4,6 +4,7 @@ import os
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 import pytz
+import urllib.parse
 from get_top_apis import build_index, load_cached_index, save_index_to_cache, embed
 
 load_dotenv()
@@ -116,7 +117,7 @@ def call_claude(prompt):
     try:
         # Get API key from environment variable
         api_key = os.getenv('CLAUDE_API_KEY')
-        if not api_key:
+        if not api_key or len(api_key) < 10:
             print("Error: CLAUDE_API_KEY environment variable not set.")
             print("Please set your Claude API key: export CLAUDE_API_KEY='your-api-key-here'")
             return None
@@ -175,7 +176,7 @@ def call_ollama(prompt):
 def parse_response(llm_response):
     """Parses the JSON string from the LLM's response."""
     if not llm_response:
-        return None, None
+        return None, None, None
     try:
         if print_raw_response:
             print("Raw response was:\n", llm_response)
@@ -187,15 +188,16 @@ def parse_response(llm_response):
         data = json.loads(json_str)
         action = data.get("action")
         params = data.get("payload")
-        return action, params
+        api = data.get("api")
+        return action, params, api
     except json.JSONDecodeError as e:
         print(f"❌ Failed to parse LLM response as JSON: {e}")
         print("Raw response was:\n", llm_response)
-        return None, None
+        return None, None, None
     except Exception as e:
         print(f"❌ An unexpected error occurred during parsing: {e}")
         print("Raw response was:\n", llm_response)
-        return None, None
+        return None, None, None
 
 def collect_missing_fields(params):
     """
@@ -294,7 +296,27 @@ def main():
         prompt = build_prompt(user_input, api_path=matched_api["path"], api_method=matched_api["method"], api_parameters=matched_api["parameters"], api_request_body=matched_api["requestBody"])
         llm_response = call_claude(prompt)
         
-        action, params = parse_response(llm_response)
+        action, params, api = parse_response(llm_response)
+
+        if matched_api["method"] == "GET":
+            parsed_url = urllib.parse.urlparse(api)
+            query_params = urllib.parse.parse_qs(parsed_url.query)
+            missing_fields = []
+            for key, value in query_params.items():
+                if value[0] == "REQUIRED_FIELD_MISSING":
+                    missing_fields.append(key)
+                    query_params[key] = value[0]
+                else:
+                    query_params[key] = value[0]
+                    
+            if missing_fields:
+                print("Some required fields are missing. Please provide the following information:")
+                updated_params = collect_missing_fields(query_params)
+                if updated_params is None:
+                    print("\n❌ Cannot determine correct API call without all required fields.")
+                    continue
+                query_params = updated_params
+                api = parsed_url.path + "?" + "&".join([f"{key}={value}" for key, value in query_params.items()])
 
         if action and action != 'more_info_needed':
             # Check if there are any required fields missing
@@ -307,7 +329,7 @@ def main():
                 params = updated_params
             
             print(f"\n➡️ Action: {action}")
-            print(f"📦 API: {matched_api['path']}")
+            print(f"📦 API: {api}")
             print(f"📦 Method: {matched_api['method']}")
             print(f"📦 Payload: {json.dumps(params, indent=2)}")
             # Here you would add the logic to actually execute the API call
