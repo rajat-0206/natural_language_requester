@@ -36,13 +36,30 @@ def build_index(schema_entries):
         # Start with operationId as it's the most descriptive
         operation_id = entry.get('operationId', '')
         description = entry.get("description", "")
+        method = entry.get('method', '')
         
         # Create a weighted summary that emphasizes the operation's purpose
         summary_parts = []
         
-        # Add operationId with very high weight (repeated more times for emphasis)
+        # Add HTTP method with HIGHEST weight and descriptive action words
+        method_action_map = {
+            'GET': 'fetch retrieve get read obtain',
+            'POST': 'create add new insert',
+            'PATCH': 'update modify edit change',
+            'PUT': 'update replace modify edit change',
+            'DELETE': 'remove delete destroy eliminate'
+        }
+        
+        # Add method with very high weight (repeated many times for emphasis)
+        if method in method_action_map:
+            # Repeat method 8 times for strongest emphasis
+            summary_parts.extend([method] * 8)
+            # Add descriptive action words for the method
+            summary_parts.extend(method_action_map[method].split() * 4)
+        
+        # Add operationId with high weight (repeated for emphasis)
         if operation_id:
-            # Repeat operationId 5 times for stronger emphasis
+            # Repeat operationId 5 times for emphasis
             summary_parts.extend([operation_id] * 5)
             
             # Add operationId with spaces between words for better matching
@@ -55,11 +72,11 @@ def build_index(schema_entries):
         if description:
             summary_parts.append(description)
             
-        # Add method and path with lower weight
-        summary_parts.append(f"{entry['method']} {entry['path']}")
+        # Add method and path with medium weight
+        summary_parts.append(f"{method} {entry['path']}")
         
         # Add request body or query params with lowest weight
-        if entry.get("method") == "GET":
+        if method == "GET":
             query_params = entry.get("parameters", [])
             if query_params:
                 summary_parts.append(f"Query params: {query_params}")

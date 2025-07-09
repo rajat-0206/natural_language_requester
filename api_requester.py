@@ -48,19 +48,17 @@ Your task is to analyze the user's request and the matched API endpoint to gener
 1. Analyze the user's request and extract all necessary information.
 2. Fill in the API path parameters if required (replace {{param}} with actual values).
 3. If a required parameter is missing and cannot be inferred, use "REQUIRED_FIELD_MISSING".
-4. If request method is GET only add limit and offset parameters and take default values as limit=10 and offset=0
+4. If request method is GET only add payload as query parameters and take default values as limit=10 and offset=0
 5. For dates and times:
    - Convert relative times (e.g., "tomorrow", "next week") to actual dates
    - Use the current timezone (Asia/Kolkata) if not specified
    - Format all dates in ISO 8601 format
-6. Respond ONLY with a single, valid JSON object containing:
-   - action: The action being performed
-   - api: The complete API path with parameters filled
-   - payload: The request payload
-7. PLEASE DO NOT RETURN ANYTHING OTHER THAN THE JSON OBJECT. IF YOU WANT TO PASS A NOTE, ADD IT IN JSON OBJECT AS "note": "..." SINCE 
+6. PLEASE DO NOT RETURN ANYTHING OTHER THAN THE JSON OBJECT. IF YOU WANT TO PASS A NOTE, ADD IT IN JSON OBJECT AS "note": "..." SINCE 
 WE ARE USING THIS JSON OBJECT TO PARSE RESPONSE AND DISPLAY IT TO THE USER.
 8. If logged_in_user is present then use it as owner field in payload if required.
 9. If organization is present then use it as organization field in payload if required.
+10. You will also get a currentPage object, if it is present it will contain either (or all) event_id, broadcast_id. Use that info while building
+the request payload.
 
 **EXAMPLES:**
 ---
@@ -81,11 +79,8 @@ Response: {{
 User: Get all events
 Response: {{
   "action": "Get all events",
-  "api": "/event/",
-  "payload": {{
-    "limit": 10,
-    "offset": 0
-  }}
+  "api": "/event/?limit=10&offset=0",
+  "payload": {{}}
 }}
 ---
 
@@ -166,7 +161,7 @@ def main():
                     continue
                 params = updated_params
             
-            sanitized_path = sanitize_api_url(matched_api['path'])
+            sanitized_path = sanitize_api_url(api)
             sanitized_params = json.loads(sanitize_api_params(params))
             curl_command = generate_curl_command(matched_api, sanitized_params, sanitized_path)
             

@@ -261,12 +261,12 @@ def sanitize_api_url(path):
     '''
     Sanitize the API path and parameters to convert any random value to correct type like tomorrow becomes actual data
     '''
-    prompt = f"""
-    Sanitize the API path {path} to convert any random value to correct type like tomorrow becomes actual data. Only return the sanitized text.
-    If path is already sanitized, return the same path.
-    """
-    response = call_model(prompt)
-    return response
+    # prompt = f"""
+    # Sanitize the API path {path} to convert any random value to correct type like tomorrow becomes actual data. Only return the sanitized text.
+    # If path is already sanitized, return the same path.
+    # """
+    # response = call_model(prompt)
+    return path
 
 def sanitize_api_params(params):
     '''
@@ -328,16 +328,11 @@ def handle_get_request_params(api, params):
             query_params[key] = value[0]
         else:
             query_params[key] = value[0]
-            
-    if missing_fields:
-        print("Some required fields are missing. Please provide the following information:")
-        updated_params = collect_missing_fields(query_params)
-        if updated_params is None:
-            return None, None, missing_fields
-        query_params = updated_params
-        api = parsed_url.path + "?" + "&".join([f"{key}={value}" for key, value in query_params.items()])
     
-    return api, params, missing_fields
+    if not missing_fields:
+        return api, params, None
+    
+    return parsed_url.path, query_params, missing_fields
 
 def make_api_call(method, api_path, payload=None, headers=None):
     """

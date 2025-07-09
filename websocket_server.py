@@ -6,7 +6,7 @@ from api_requester import (
     build_prompt, 
     build_index, 
     load_cached_index, 
-    save_index_to_cache, 
+    save_index_to_cache,
     embed
 )
 import time
@@ -106,16 +106,14 @@ def handle_api_request(data):
         emit('status', {'message': 'Finding matching API...', 'status': 'searching'})
         time.sleep(0.5)
         
-        # Find the best matching API using semantic search
         query_emb = embed([search_text])
-        _, top_ids = index.search(query_emb, 1)  # Get top 1 match
+        _, top_ids = index.search(query_emb, 1)
         matched_api = metadata[top_ids[0][0]]
 
         print("Matched API: ", matched_api)
         emit('status', {'message': f'Found API: {matched_api["path"]}', 'status': 'found_api'})
         
         time.sleep(0.5)
-        # Use Claude to fill in the details
         prompt = build_prompt(
             user_input, 
             api_path=matched_api["path"], 
@@ -136,7 +134,10 @@ def handle_api_request(data):
                     'message': 'Some required fields are missing',
                     'missing_fields': missing_fields,
                     'current_params': params,
-                    'matched_api': matched_api
+                    'matched_api': api,
+                    'request_method': matched_api['method'],
+                    'action': action,
+                    'user_input': user_input
                 })
                 return
 
@@ -149,14 +150,15 @@ def handle_api_request(data):
                     'message': 'Some required fields are missing',
                     'missing_fields': missing_fields,
                     'current_params': params,
-                    'matched_api': matched_api
+                    'matched_api': api,
+                    'request_method': matched_api['method'],
+                    'action': action,
+                    'user_input': user_input
                 })
                 return
             
-            # Generate curl command
-            final_response = get_final_response(action, matched_api['path'], matched_api['method'], params)
-            
-            # Send final response
+            final_response = get_final_response(action, api, matched_api['method'], params)
+
             emit('api_response', final_response)
 
             time.sleep(1)
@@ -181,15 +183,23 @@ def handle_missing_fields(data):
         provided_fields = data.get('fields', {})
         current_params = data.get('current_params', {})
         matched_api = data.get('matched_api', {})
+        request_method = data.get('request_method', "GET")
+        action = data.get('action', "")
+        user_input = data.get('user_input', "")
         
         # Update params with provided fields
         updated_params = current_params.copy()
         updated_params.update(provided_fields)
+
+        if request_method == "GET":
+            api = matched_api + "?" + "&".join([f"{key}={value}" for key, value in updated_params.items()])
+        else:
+            api = matched_api
         
         # Generate curl command
-        sanitized_path = sanitize_api_url(matched_api['path'])
+        sanitized_path = sanitize_api_url(api)
         sanitized_params = json.loads(sanitize_api_params(updated_params))
-        final_response = get_final_response("API Request", sanitized_path, matched_api['method'], sanitized_params)
+        final_response = get_final_response("API Request", sanitized_path, request_method, sanitized_params)
         # Send final response
         emit('api_response', final_response)
         time.sleep(1)
@@ -199,6 +209,7 @@ def handle_missing_fields(data):
         
     except Exception as e:
         print(f"Error handling missing fields: {e}")
+        print(traceback.format_exc())
         emit('error', {'message': f'An error occurred: {str(e)}'})
 
 @socketio.on('make_api_call')
