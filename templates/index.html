@@ -258,6 +258,9 @@
         const socket = io();
         let currentParams = {};
         let currentApi = {};
+        let action = "";
+        let requestMethod = "";
+        let userInput = "";
 
         // Connection status
         socket.on('connect', () => {
@@ -282,7 +285,7 @@
         // Handle missing fields
         socket.on('missing_fields', (data) => {
             hideLoading();
-            showMissingFields(data.missing_fields, data.current_params, data.matched_api);
+            showMissingFields(data.missing_fields, data.current_params, data.matched_api, data.action, data.request_method, data.user_input);
         });
 
         // Handle final response
@@ -324,11 +327,17 @@
 
             showLoading();
             hideMissingFields();
+            console.log("action", action);
+            console.log("requestMethod", requestMethod);
+            console.log("userInput", userInput);
             
             socket.emit('provide_missing_fields', {
                 fields: fields,
                 current_params: currentParams,
-                matched_api: currentApi
+                matched_api: currentApi,
+                action: action,
+                request_method: requestMethod,
+                user_input: userInput
             });
         });
 
@@ -358,9 +367,12 @@
             document.getElementById('submitBtn').disabled = false;
         }
 
-        function showMissingFields(missingFields, params, api) {
+        function showMissingFields(missingFields, params, api, action, requestMethod, userInput) {
             currentParams = params;
             currentApi = api;
+            action = action;
+            requestMethod = requestMethod;
+            userInput = userInput;
             
             const container = document.getElementById('missingFields');
             const message = document.getElementById('missingFieldsMessage');

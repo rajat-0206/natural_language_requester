@@ -9,6 +9,13 @@ from api_requester import (
     save_index_to_cache,
     embed
 )
+from get_top_apis import (
+    build_scann_index,
+    load_cached_scann_index,
+    save_scann_index_to_cache,
+    search_apis_scann,
+    search_apis
+)
 import time
 from utils import (
     sanitize_api_url,
@@ -30,11 +37,14 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 API_SCHEMA = None
 index = None
 metadata = None
+scann_index = None
+scann_metadata = None
+SEARCH_MODEL = "scann"  # or "scann"
 
-def initialize_api_system():
+def initialize_api_system(search_model="faiss"):
     """Initialize the API schema and search index."""
-    global API_SCHEMA, index, metadata
-    
+    global API_SCHEMA, index, metadata, scann_index, scann_metadata, SEARCH_MODEL
+    SEARCH_MODEL = search_model
     try:
         with open("schema.json", "r") as f:
             API_SCHEMA = json.load(f)
@@ -42,16 +52,28 @@ def initialize_api_system():
         print("Error: `schema.json` not found. Please make sure the file is in the same directory.")
         return False
 
-    # Initialize the semantic search index
-    index, metadata, _, _, _ = load_cached_index()
-    if index is None:
-        print("Building new index...")
-        index, metadata, _, _, _ = build_index(API_SCHEMA)
-        save_index_to_cache(index, metadata, None, None)
-        print("Index built and cached successfully!")
+    if SEARCH_MODEL == "faiss":
+        # Initialize the semantic search index (FAISS)
+        index, metadata, _, _, _ = load_cached_index()
+        if index is None:
+            print("Building new index...")
+            index, metadata, _, _, _ = build_index(API_SCHEMA)
+            save_index_to_cache(index, metadata, None, None)
+            print("Index built and cached successfully!")
+        else:
+            print("Using cached index...")
+    elif SEARCH_MODEL == "scann":
+        # Initialize the semantic search index (SCANN)
+        scann_index, scann_metadata, _, _, _ = load_cached_scann_index()
+        if scann_index is None:
+            print("Building new SCANN index...")
+            scann_index, scann_metadata, _, _, _ = build_scann_index(API_SCHEMA)
+            save_scann_index_to_cache(scann_index, scann_metadata, None, None)
+            print("SCANN index built and cached successfully!")
+        else:
+            print("Using cached SCANN index...")
     else:
-        print("Using cached index...")
-    
+        raise ValueError(f"Unknown search model: {SEARCH_MODEL}")
     return True
 
 @app.route('/')
@@ -104,16 +126,21 @@ def handle_api_request(data):
             search_text = user_input  # fallback
 
         emit('status', {'message': 'Finding matching API...', 'status': 'searching'})
-        time.sleep(0.5)
-        
-        query_emb = embed([search_text])
-        _, top_ids = index.search(query_emb, 1)
-        matched_api = metadata[top_ids[0][0]]
+
+        # Use the selected search model
+        if SEARCH_MODEL == "faiss":
+            query_emb = embed([search_text])
+            _, top_ids = index.search(query_emb, 1)
+            matched_api = metadata[top_ids[0][0]]
+        elif SEARCH_MODEL == "scann":
+            results = search_apis_scann(search_text, scann_index, scann_metadata, None, None, top_k=1)
+            matched_api = results[0]['api']
+        else:
+            raise ValueError(f"Unknown search model: {SEARCH_MODEL}")
 
         print("Matched API: ", matched_api)
         emit('status', {'message': f'Found API: {matched_api["path"]}', 'status': 'found_api'})
         
-        time.sleep(0.5)
         prompt = build_prompt(
             user_input, 
             api_path=matched_api["path"], 
@@ -186,6 +213,13 @@ def handle_missing_fields(data):
         request_method = data.get('request_method', "GET")
         action = data.get('action', "")
         user_input = data.get('user_input', "")
+
+        print("request method", request_method)
+        print("matched api", matched_api)
+        print("current params", current_params)
+        print("provided fields", provided_fields)
+        print("action", action)
+        print("user input", user_input)
         
         # Update params with provided fields
         updated_params = current_params.copy()
