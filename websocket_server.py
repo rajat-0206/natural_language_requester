@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request
 from flask_socketio import SocketIO, emit
 import json
+import subprocess
 import traceback
 from api_requester import (
     build_prompt, 
@@ -268,6 +269,73 @@ def handle_make_api_call(data):
     except Exception as e:
         print(f"Error making API call: {e}")
         emit('error', {'message': f'An error occurred: {str(e)}'})
+
+@socketio.on('upload_csv')
+def handle_upload_csv(data):
+    '''
+    Upload a csv file to the server
+    '''
+    try:
+        csv_content = data.get('csv_file')
+        event_id = data.get('event_id')
+
+        print("Uploading CSV to event", event_id)
+
+        if not csv_content:
+            emit('upload_error', {'message': 'No CSV content provided'})
+            return
+
+        if not event_id:
+            emit('upload_error', {'message': 'No event ID provided'})
+            return
+
+        # Create a temporary CSV file
+        import tempfile
+        import os
+        
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as temp_file:
+            temp_file.write(csv_content)
+            temp_file_path = temp_file.name
+
+        try:
+            print("Calling csv_uploader.js")
+            # Use subprocess to call the csv_uploader.js file
+            result = subprocess.run(
+                ['node', 'csv_uploader.js', temp_file_path, event_id], 
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True, 
+                timeout=30
+            )
+            print("Result", result)
+            
+            # Clean up the temporary file
+            os.unlink(temp_file_path)
+            
+            if result.returncode == 0:
+                emit('upload_success', {
+                    'message': f'CSV uploaded successfully for event {event_id}!',
+                    'output': result.stdout
+                })
+            else:
+                emit('upload_error', {
+                    'message': f'Failed to upload CSV: {result.stderr}',
+                    'details': result.stdout
+                })
+                
+        except subprocess.TimeoutExpired:
+            # Clean up the temporary file
+            os.unlink(temp_file_path)
+            emit('upload_error', {'message': 'Upload timed out. Please try again.'})
+        except FileNotFoundError:
+            # Clean up the temporary file
+            os.unlink(temp_file_path)
+            emit('upload_error', {'message': 'csv_uploader.js not found. Please ensure the file exists.'})
+            
+    except Exception as e:
+        print(f"Error uploading CSV: {e}")
+        print(traceback.format_exc())
+        emit('upload_error', {'message': f'An error occurred: {str(e)}'})
 
 def get_final_response(action, api_path, method, payload):
     return {

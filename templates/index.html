@@ -236,6 +236,37 @@
                 </button>
             </div>
 
+            <!-- CSV Upload Section -->
+            <div class="input-section" style="border-top: 2px solid #e1e5e9; padding-top: 30px; margin-top: 30px;">
+                <h3 style="color: #333; margin-bottom: 20px; font-size: 1.3rem;">📁 Upload CSV File</h3>
+                
+                <div class="input-group">
+                    <label for="csvFile">Select CSV File</label>
+                    <input 
+                        type="file" 
+                        id="csvFile" 
+                        accept=".csv"
+                        style="padding: 10px; border: 2px dashed #667eea; border-radius: 10px; background: #f8f9fa;"
+                    >
+                </div>
+                
+                <div class="input-group">
+                    <label for="eventId">Event ID (Required)</label>
+                    <input 
+                        type="text" 
+                        id="eventId" 
+                        placeholder="Enter the event ID where you want to upload the CSV"
+                    >
+                </div>
+                
+                <button id="uploadCsvBtn" class="btn" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
+                    <span id="uploadBtnText">Upload CSV</span>
+                    <span id="uploadLoadingSpinner" class="loading hidden"></span>
+                </button>
+                
+                <div id="uploadStatus" class="status hidden"></div>
+            </div>
+
             <div id="status" class="status hidden"></div>
             
             <div id="missingFields" class="missing-fields hidden">
@@ -280,6 +311,29 @@
         socket.on('error', (data) => {
             showStatus(data.message, 'error');
             hideLoading();
+            hideUploadLoading();
+        });
+
+        // Handle upload success
+        socket.on('upload_success', (data) => {
+            hideUploadLoading();
+            showUploadStatus(data.message || 'CSV uploaded successfully!', 'connected');
+            // Clear form fields
+            clearUploadForm();
+            // Auto-hide success message after 5 seconds
+            setTimeout(() => {
+                document.getElementById('uploadStatus').classList.add('hidden');
+            }, 5000);
+        });
+
+        // Handle upload errors
+        socket.on('upload_error', (data) => {
+            hideUploadLoading();
+            showUploadStatus(data.message || 'Upload failed', 'error');
+            // Auto-hide error message after 8 seconds
+            setTimeout(() => {
+                document.getElementById('uploadStatus').classList.add('hidden');
+            }, 8000);
         });
 
         // Handle missing fields
@@ -341,6 +395,48 @@
             });
         });
 
+        // CSV Upload button click
+        document.getElementById('uploadCsvBtn').addEventListener('click', () => {
+            const csvFile = document.getElementById('csvFile').files[0];
+            const eventId = document.getElementById('eventId').value.trim();
+            
+            if (!csvFile) {
+                showUploadStatus('Please select a CSV file', 'error');
+                return;
+            }
+            
+            if (!eventId) {
+                showUploadStatus('Please enter an Event ID', 'error');
+                return;
+            }
+            
+            if (!csvFile.name.toLowerCase().endsWith('.csv')) {
+                showUploadStatus('Please select a valid CSV file', 'error');
+                return;
+            }
+            
+            showUploadLoading();
+            
+            // Read the CSV file
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const csvContent = e.target.result;
+                
+                // Emit the upload_csv event
+                socket.emit('upload_csv', {
+                    csv_file: csvContent,
+                    event_id: eventId
+                });
+            };
+            
+            reader.onerror = function() {
+                showUploadStatus('Error reading CSV file', 'error');
+                hideUploadLoading();
+            };
+            
+            reader.readAsText(csvFile);
+        });
+
         // Enter key in textarea
         document.getElementById('query').addEventListener('keypress', (e) => {
             if (e.key === 'Enter' && e.ctrlKey) {
@@ -365,6 +461,25 @@
             document.getElementById('btnText').textContent = 'Generate API Call';
             document.getElementById('loadingSpinner').classList.add('hidden');
             document.getElementById('submitBtn').disabled = false;
+        }
+
+        function showUploadStatus(message, type) {
+            const uploadStatusEl = document.getElementById('uploadStatus');
+            uploadStatusEl.textContent = message;
+            uploadStatusEl.className = `status ${type}`;
+            uploadStatusEl.classList.remove('hidden');
+        }
+
+        function showUploadLoading() {
+            document.getElementById('uploadBtnText').textContent = 'Uploading...';
+            document.getElementById('uploadLoadingSpinner').classList.remove('hidden');
+            document.getElementById('uploadCsvBtn').disabled = true;
+        }
+
+        function hideUploadLoading() {
+            document.getElementById('uploadBtnText').textContent = 'Upload CSV';
+            document.getElementById('uploadLoadingSpinner').classList.add('hidden');
+            document.getElementById('uploadCsvBtn').disabled = false;
         }
 
         function showMissingFields(missingFields, params, api, action, requestMethod, userInput) {
@@ -417,6 +532,11 @@
 
         function hideResult() {
             document.getElementById('result').classList.add('hidden');
+        }
+
+        function clearUploadForm() {
+            document.getElementById('csvFile').value = '';
+            document.getElementById('eventId').value = '';
         }
     </script>
 </body>
