@@ -11,12 +11,12 @@ except ImportError:
     print("Warning: SCANN not available. Using scikit-learn NearestNeighbors as fallback.")
     from sklearn.neighbors import NearestNeighbors
     SCANN_AVAILABLE = False
-# import matplotlib.pyplot as plt
-# from sklearn.manifold import TSNE
-# from sklearn.feature_extraction.text import TfidfVectorizer
-# from sklearn.metrics.pairwise import cosine_similarity
+import matplotlib.pyplot as plt
+from sklearn.manifold import TSNE
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 from transformers import AutoTokenizer, AutoModel
-# from sklearn.decomposition import PCA
+from sklearn.decomposition import PCA
 
 # Load schema
 with open("schema.json", "r") as f:

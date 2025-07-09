@@ -183,6 +183,11 @@
             color: #856404;
         }
 
+        .field-input label.nested {
+            color: #d63384;
+            font-size: 0.9em;
+        }
+
         .field-input input {
             width: 100%;
             padding: 10px;
@@ -499,9 +504,14 @@
             missingFields.forEach(field => {
                 const div = document.createElement('div');
                 div.className = 'field-input';
+                
+                // Convert nested field names to user-friendly labels
+                const fieldLabel = field.replace(/\./g, ' → ').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                const isNested = field.includes('.');
+                
                 div.innerHTML = `
-                    <label for="${field}">${field.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</label>
-                    <input type="text" name="${field}" placeholder="Enter ${field.replace(/_/g, ' ')}">
+                    <label for="${field}" class="${isNested ? 'nested' : ''}">${fieldLabel}</label>
+                    <input type="text" name="${field}" placeholder="Enter ${fieldLabel.toLowerCase()}">
                 `;
                 inputs.appendChild(div);
             });

@@ -171,9 +171,9 @@ def handle_api_request(data):
 
 
         if action and action != 'more_info_needed':
-            # Check if there are any required fields missing
-            if params and any(value == "REQUIRED_FIELD_MISSING" for value in params.values()):
-                missing_fields = [key for key, value in params.items() if value == "REQUIRED_FIELD_MISSING"]
+            # Check if there are any required fields missing (including nested ones)
+            missing_fields = find_missing_fields_nested(params)
+            if missing_fields:
                 emit('missing_fields', {
                     'message': 'Some required fields are missing',
                     'missing_fields': missing_fields,
@@ -222,9 +222,8 @@ def handle_missing_fields(data):
         print("action", action)
         print("user input", user_input)
         
-        # Update params with provided fields
-        updated_params = current_params.copy()
-        updated_params.update(provided_fields)
+        # Update params with provided fields (handling nested structures)
+        updated_params = update_nested_dict(current_params, provided_fields)
 
         if request_method == "GET":
             api = matched_api + "?" + "&".join([f"{key}={value}" for key, value in updated_params.items()])
@@ -345,6 +344,66 @@ def get_final_response(action, api_path, method, payload):
             'payload': payload,
             'status': 'success'
         }
+
+def flatten_nested_dict(data, parent_key='', sep='.'):
+    """Flatten a nested dictionary, creating dot-notation keys for nested objects."""
+    items = []
+    for k, v in data.items():
+        new_key = f"{parent_key}{sep}{k}" if parent_key else k
+        if isinstance(v, dict):
+            items.extend(flatten_nested_dict(v, new_key, sep=sep).items())
+        else:
+            items.append((new_key, v))
+    return dict(items)
+
+def unflatten_dict(data, sep='.'):
+    """Convert flattened dictionary back to nested structure."""
+    result = {}
+    for key, value in data.items():
+        keys = key.split(sep)
+        current = result
+        for k in keys[:-1]:
+            if k not in current:
+                current[k] = {}
+            current = current[k]
+        current[keys[-1]] = value
+    return result
+
+def find_missing_fields_nested(params):
+    """Find all missing fields in a nested structure and return flattened keys."""
+    missing_fields = []
+    
+    def check_nested(obj, prefix=''):
+        if isinstance(obj, dict):
+            for key, value in obj.items():
+                current_key = f"{prefix}.{key}" if prefix else key
+                if value == "REQUIRED_FIELD_MISSING":
+                    missing_fields.append(current_key)
+                elif isinstance(value, dict):
+                    check_nested(value, current_key)
+        elif isinstance(obj, list):
+            for i, item in enumerate(obj):
+                current_key = f"{prefix}[{i}]" if prefix else f"[{i}]"
+                if isinstance(item, dict):
+                    check_nested(item, current_key)
+    
+    check_nested(params)
+    return missing_fields
+
+def update_nested_dict(original_dict, updates):
+    """Update a nested dictionary with flattened key-value pairs."""
+    result = original_dict.copy()
+    
+    for key, value in updates.items():
+        keys = key.split('.')
+        current = result
+        for k in keys[:-1]:
+            if k not in current:
+                current[k] = {}
+            current = current[k]
+        current[keys[-1]] = value
+    
+    return result
 
 
 if __name__ == '__main__':
