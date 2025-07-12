@@ -236,19 +236,19 @@
                 </div>
                 
                 <div style="display: flex; gap: 10px;">
-                    <button id="submitBtn" class="btn" style="flex: 1;">
+                    <button id="submitBtn" class="btn" style="flex: 1; display: none;">
                         <span id="btnText">Generate API Call</span>
                         <span id="loadingSpinner" class="loading hidden"></span>
                     </button>
                     <button id="multipleRequestsBtn" class="btn" style="flex: 1; background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);">
-                        <span id="multipleBtnText">Multiple Requests</span>
+                        <span id="multipleBtnText">Execute</span>
                         <span id="multipleLoadingSpinner" class="loading hidden"></span>
                     </button>
                 </div>
             </div>
 
             <!-- CSV Upload Section -->
-            <div class="input-section" style="border-top: 2px solid #e1e5e9; padding-top: 30px; margin-top: 30px;">
+            <!-- <div class="input-section" style="border-top: 2px solid #e1e5e9; padding-top: 30px; margin-top: 30px;">
                 <h3 style="color: #333; margin-bottom: 20px; font-size: 1.3rem;">📁 Upload CSV File</h3>
                 
                 <div class="input-group">
@@ -276,7 +276,7 @@
                 </button>
                 
                 <div id="uploadStatus" class="status hidden"></div>
-            </div>
+            </div> -->
 
             <div id="status" class="status hidden"></div>
             
@@ -318,6 +318,10 @@
                 </div>
             </div>
 
+            <div id="improvingPlanMessage" class="status processing hidden" style="margin-top: 20px; text-align: center;">
+                Improving plan...
+            </div>
+
             <div id="executionProgress" class="result hidden">
                 <h3>🚀 Executing Plan</h3>
                 <div id="currentStep"></div>
@@ -338,6 +342,7 @@
         let action = "";
         let requestMethod = "";
         let userInput = "";
+        let missingFieldData = {};
 
         // Connection status
         socket.on('connect', () => {
@@ -481,7 +486,8 @@
                 matched_api: currentApi,
                 action: action,
                 request_method: requestMethod,
-                user_input: userInput
+                user_input: userInput,
+                ...missingFieldData
             });
         });
 
@@ -512,7 +518,8 @@
                 plan: window.multiplePlan,
                 user_input: window.multipleUserInput,
                 previous_results: window.multiplePreviousResults,
-                completed_steps: window.multipleCompletedSteps
+                completed_steps: window.multipleCompletedSteps,
+                ...missingFieldData
             });
         });
 
@@ -559,6 +566,7 @@
             showMultipleLoading();
             document.getElementById('planModification').classList.add('hidden');
             document.getElementById('modificationFeedback').value = '';
+            showImprovingPlanMessage(); // <-- Add this line
             
             socket.emit('modify_execution_plan', {
                 plan: plan,
@@ -703,6 +711,7 @@
         }
 
         function showMultipleRequestsMissingFields(data) {
+            missingFieldData = data;
             window.multipleCurrentParams = data.current_params;
             window.multipleMatchedApi = data.matched_api;
             window.multipleStepNumber = data.step_number;
@@ -764,6 +773,7 @@
         }
 
         function showExecutionPlan(plan, userInput) {
+            hideImprovingPlanMessage(); // <-- Add this line at the start
             window.currentPlan = plan;
             window.currentUserInput = userInput;
             
@@ -798,7 +808,7 @@
                         Step ${step.step_number}: ${step.description}
                     </h4>
                     <p style="margin: 0 0 8px 0; color: #666; font-size: 0.9em;">
-                        <strong>API Request:</strong> ${step.api_request}${dependencies}
+                        <strong>API Description:</strong> ${step.api_description}${dependencies}
                     </p>
                     <p style="margin: 0; color: #666; font-size: 0.9em;">
                         <strong>Expected Result:</strong> ${step.expected_result}
@@ -893,7 +903,7 @@
                             <strong>Status:</strong> ${step.status}
                         </p>
                         <p style="margin: 0 0 8px 0; color: #666; font-size: 0.9em;">
-                            <strong>API Request:</strong> ${step.api_request}
+                            <strong>API Description:</strong> ${step.api_description}
                         </p>
                         ${step.error ? `<p style="margin: 0; color: #dc3545; font-size: 0.9em;"><strong>Error:</strong> ${step.error}</p>` : ''}
                         ${step.result && step.result.response ? `
@@ -908,6 +918,19 @@
             
             content.innerHTML = resultHtml;
             container.classList.remove('hidden');
+        }
+
+        function showImprovingPlanMessage() {
+            document.getElementById('improvingPlanMessage').classList.remove('hidden');
+            document.getElementById('approvePlanBtn').classList.add('hidden');
+            document.getElementById('modifyPlanBtn').classList.add('hidden');
+            document.getElementById('planModification').classList.add('hidden');
+        }
+
+        function hideImprovingPlanMessage() {
+            document.getElementById('improvingPlanMessage').classList.add('hidden');
+            document.getElementById('approvePlanBtn').classList.remove('hidden');
+            document.getElementById('modifyPlanBtn').classList.remove('hidden');
         }
 
         function clearUploadForm() {

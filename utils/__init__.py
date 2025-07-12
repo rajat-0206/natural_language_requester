@@ -1,3 +1,4 @@
+# Utils package
 import json
 import requests
 import os
@@ -12,7 +13,7 @@ load_dotenv()
 API_SCHEMA = None
 print_raw_response = True
 CLAUDE_API_KEY = os.getenv('CLAUDE_API_KEY')
-MODEL_TO_USE = "OLLAMA"
+MODEL_TO_USE = "CLAUDE"
 CLAUDE_API_HOST = 'https://api.anthropic.com/v1/messages'
 
 NEXT_BEST_SUGGESTIONS = {
@@ -167,7 +168,7 @@ def call_ollama(prompt):
         response = requests.post(
             "http://localhost:11434/api/generate",
             json={
-                "model": "llama3:8b-instruct-q4_1",
+                "model": "mistral:latest",
                 "prompt": prompt,
                 "stream": False,
                 "format": "json",
@@ -363,6 +364,7 @@ def make_api_call(method, api_path, payload=None, headers=None):
     Make an API call to the API server using requests module.
     Returns the response JSON and status.
     """
+    response = None
     try:
         # Get API configuration from environment variables
         api_host = os.getenv('API_HOST', 'https://httpbin.org')
@@ -395,17 +397,21 @@ def make_api_call(method, api_path, payload=None, headers=None):
         try:
             response_data = response.json()
         except json.JSONDecodeError:
-            response_data = {"text": response.text}
+            response_data = {"text": response.content}
         
         print(f"API call successful: {response.status_code}")
         return response_data, response.status_code
         
     except requests.exceptions.RequestException as e:
-        print(f"Error making API call: {e}")
-        return None, None
+        response_error = {"text": response.content}
+        print(f"Error making API call: {response_error}")
+        if response.status_code > 299 and response.status_code < 400: 
+            return response.content, response.status_code
+        else:
+            return "Unknown error", response.status_code
     except json.JSONDecodeError as e:
         print(f"Error parsing API response: {e}")
-        return None, None 
+        return "Invalid response", response.status_code
     
 def suggest_next_best_item(current_item, user_query):
     '''
@@ -469,3 +475,39 @@ def call_openai(prompt):
     except requests.exceptions.RequestException as e:
         print("Error in call_openai", e)
         return None
+
+def find_missing_fields_nested(params):
+    """Find all missing fields in a nested structure and return flattened keys."""
+    missing_fields = []
+    
+    def check_nested(obj, prefix=''):
+        if isinstance(obj, dict):
+            for key, value in obj.items():
+                current_key = f"{prefix}.{key}" if prefix else key
+                if value == "REQUIRED_FIELD_MISSING":
+                    missing_fields.append(current_key)
+                elif isinstance(value, dict):
+                    check_nested(value, current_key)
+        elif isinstance(obj, list):
+            for i, item in enumerate(obj):
+                current_key = f"{prefix}[{i}]" if prefix else f"[{i}]"
+                if isinstance(item, dict):
+                    check_nested(item, current_key)
+    
+    check_nested(params)
+    return missing_fields
+
+def update_nested_dict(original_dict, updates):
+    """Update a nested dictionary with flattened key-value pairs."""
+    result = original_dict.copy()
+    
+    for key, value in updates.items():
+        keys = key.split('.')
+        current = result
+        for k in keys[:-1]:
+            if k not in current:
+                current[k] = {}
+            current = current[k]
+        current[keys[-1]] = value
+    
+    return result 
