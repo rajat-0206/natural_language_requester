@@ -10,6 +10,9 @@ A real-time WebSocket server that converts natural language requests into API ca
 - 🎯 **Semantic search** to find the most relevant API endpoints
 - 📋 **cURL command generation** for easy API testing
 - 🎨 **Modern, responsive UI** with real-time status updates
+- 🔄 **Multiple Requests Support** for complex workflows with step-by-step execution
+- 📋 **Execution Planning** with user approval and modification capabilities
+- 🚀 **Context-Aware Execution** that uses results from previous steps
 
 ## Setup
 
@@ -25,6 +28,8 @@ Create a `.env` file in the project directory:
 
 ```bash
 CLAUDE_API_KEY=your_claude_api_key_here
+API_KEY=your_api_key_here
+API_HOST=https://your-api-domain.com
 ```
 
 ### 3. Prepare API Schema
@@ -56,11 +61,27 @@ The server will start on `http://localhost:5000`
 
 ### Web Interface
 
+#### Single API Request
 1. Open your browser and navigate to `http://localhost:5000`
 2. Enter your request in natural language (e.g., "Create an event for tomorrow at 3 PM called 'Team Meeting' for 1 hour")
 3. Click "Generate API Call" or press Ctrl+Enter
 4. If required fields are missing, the system will prompt you to provide them
 5. View the generated API call with the curl command
+
+#### Multiple API Requests (Complex Workflows)
+1. Enter a complex request that requires multiple steps (e.g., "Create an event and add 5 attendees")
+2. Click "Multiple Requests" button
+3. Review the generated execution plan with all steps
+4. Choose to:
+   - **Approve & Execute**: Run all steps automatically
+   - **Modify Plan**: Provide feedback to change the plan
+5. Watch real-time progress as each step executes
+6. View final results with all step outcomes
+
+**Example Complex Requests:**
+- "Create an event for tomorrow, add speakers, and send invitations"
+- "Get all events and create a broadcast for the first one"
+- "Create event, add attendees, and create a discussion group"
 
 ### WebSocket Events
 
@@ -77,6 +98,42 @@ The server will start on `http://localhost:5000`
     fields: { organization: 'my-org', owner: 'user123' },
     current_params: {...},
     matched_api: {...}
+  });
+  ```
+
+- `multiple_requests`: Request multiple API calls for complex workflows
+  ```javascript
+  socket.emit('multiple_requests', { query: 'Create event and add attendees' });
+  ```
+
+- `approve_execution_plan`: Approve and execute a generated plan
+  ```javascript
+  socket.emit('approve_execution_plan', {
+    plan: {...},
+    user_input: 'Create event and add attendees'
+  });
+  ```
+
+- `modify_execution_plan`: Request modification of an execution plan
+  ```javascript
+  socket.emit('modify_execution_plan', {
+    plan: {...},
+    feedback: 'Add a broadcast step after creating the event',
+    user_input: 'Create event and add attendees'
+  });
+  ```
+
+- `provide_multiple_requests_missing_fields`: Provide missing fields during plan execution
+  ```javascript
+  socket.emit('provide_multiple_requests_missing_fields', {
+    fields: { organization: 'my-org', owner: 'user123' },
+    current_params: {...},
+    matched_api: {...},
+    step_number: 2,
+    plan: {...},
+    user_input: 'Create event and add attendees',
+    previous_results: {...},
+    completed_steps: [...]
   });
   ```
 
@@ -117,6 +174,47 @@ The server will start on `http://localhost:5000`
   });
   ```
 
+- `execution_plan`: Generated execution plan for multiple requests
+  ```javascript
+  socket.on('execution_plan', (data) => {
+    console.log(data.plan);        // Execution plan object
+    console.log(data.user_input);  // Original user input
+    console.log(data.status);      // 'pending_approval'
+  });
+  ```
+
+- `step_completed`: Real-time updates for each step execution
+  ```javascript
+  socket.on('step_completed', (data) => {
+    console.log(data.step_number);  // Step number
+    console.log(data.description);  // Step description
+    console.log(data.status);       // 'success' or 'failed'
+    console.log(data.result);       // Step result data
+  });
+  ```
+
+- `multiple_requests_complete`: Final results of all steps
+  ```javascript
+  socket.on('multiple_requests_complete', (data) => {
+    console.log(data.results);      // Complete execution results
+    console.log(data.plan);         // Original execution plan
+    console.log(data.status);       // 'completed'
+  });
+  ```
+
+- `multiple_requests_missing_fields`: Missing fields during plan execution
+  ```javascript
+  socket.on('multiple_requests_missing_fields', (data) => {
+    console.log(data.step_number);      // Current step number
+    console.log(data.step_description); // Step description
+    console.log(data.missing_fields);   // Array of missing field names
+    console.log(data.current_params);   // Current parameters
+    console.log(data.matched_api);      // Matched API details
+    console.log(data.plan);             // Original execution plan
+    console.log(data.previous_results); // Results from previous steps
+  });
+  ```
+
 ## Architecture
 
 ### Components
@@ -128,6 +226,7 @@ The server will start on `http://localhost:5000`
 
 ### Flow
 
+#### Single Request Flow
 1. **User Input**: User enters natural language request
 2. **Query Enhancement**: Claude extracts action, data, and details
 3. **API Matching**: Semantic search finds relevant API endpoints
@@ -135,15 +234,27 @@ The server will start on `http://localhost:5000`
 5. **Missing Fields**: If required fields are missing, prompt user
 6. **Final Response**: Generate complete API call with curl command
 
+#### Multiple Requests Flow
+1. **Complex User Input**: User enters multi-step request
+2. **Plan Generation**: Claude creates execution plan with sequential steps
+3. **Plan Review**: User reviews and can modify the plan
+4. **Step Execution**: Execute each step sequentially with context from previous steps
+5. **Real-time Updates**: Show progress for each step execution
+6. **Final Results**: Display comprehensive results from all steps
+
 ## Configuration
 
-### Base URL
+### API Configuration
 
-Update the base URL in `websocket_server.py`:
+Set the following environment variables for API calls:
 
-```python
-base_url = "https://your-api-domain.com"  # Replace with your actual base URL
+```bash
+# API Configuration
+API_KEY=your_api_key_here
+API_HOST=https://your-api-domain.com
 ```
+
+The system will automatically use these values when making API calls during plan execution.
 
 ### Model Configuration
 
@@ -183,6 +294,24 @@ python websocket_server.py
 curl -X POST http://localhost:5000/api_request \
   -H "Content-Type: application/json" \
   -d '{"query": "Create an event for tomorrow"}'
+
+# Test multiple requests functionality
+python test_multiple_requests.py
+```
+
+#### Multiple Requests Testing
+
+The `test_multiple_requests.py` script tests all aspects of the multiple requests functionality:
+
+- **Execution Plan Generation**: Tests creating plans for complex requests
+- **Plan Modification**: Tests modifying plans based on user feedback
+- **Context Enhancement**: Tests enhancing requests with previous step results
+- **Prompt Building**: Tests building prompts with context from previous steps
+
+Run the test to verify everything works correctly:
+
+```bash
+python test_multiple_requests.py
 ```
 
 ## Troubleshooting

@@ -12,7 +12,7 @@ load_dotenv()
 API_SCHEMA = None
 print_raw_response = True
 CLAUDE_API_KEY = os.getenv('CLAUDE_API_KEY')
-MODEL_TO_USE = "CLAUDE"
+MODEL_TO_USE = "OLLAMA"
 CLAUDE_API_HOST = 'https://api.anthropic.com/v1/messages'
 
 NEXT_BEST_SUGGESTIONS = {
@@ -114,7 +114,6 @@ def get_current_time_for_prompt():
     return now.strftime('%Y-%m-%d %H:%M:%S %Z%z')
 
 def call_model(prompt):
-    print("MODEL_TO_USE", MODEL_TO_USE)
     if MODEL_TO_USE == "CLAUDE":
         return call_claude(prompt)
     elif MODEL_TO_USE == "OPENAI":
@@ -164,14 +163,14 @@ def call_claude(prompt):
 
 def call_ollama(prompt):
     """Calls the Ollama API with the given prompt."""
-    print("Calling Ollama")
     try:
         response = requests.post(
             "http://localhost:11434/api/generate",
             json={
-                "model": "mistral",
+                "model": "llama3:8b-instruct-q4_1",
                 "prompt": prompt,
                 "stream": False,
+                "format": "json",
                 "options": {
                     "temperature": 0.0,
                     "top_p": 0.9
@@ -179,6 +178,7 @@ def call_ollama(prompt):
             }
         )
         response.raise_for_status()
+        print("Response from Ollama", response.json()["response"])
         return response.json()["response"]
     except requests.exceptions.RequestException as e:
         print(f"Error calling Ollama: {e}")
@@ -229,6 +229,33 @@ def collect_missing_fields(params):
     updated_params.update(missing_fields)
     return updated_params
 
+def extract_json_from_response(response):
+    """
+    Extract the last valid JSON object from a string by finding the first '{' and the last matching '}'.
+    Handles nested braces and ignores text before/after the JSON.
+    """
+    if not response:
+        return "{}"
+
+    start = response.find('{')
+    if start == -1:
+        return "{}"
+
+    # Scan for the last valid JSON object using brace counting
+    brace_count = 0
+    end = -1
+    for i in range(start, len(response)):
+        if response[i] == '{':
+            brace_count += 1
+        elif response[i] == '}':
+            brace_count -= 1
+            if brace_count == 0:
+                end = i
+                # Don't break, keep looking for a later valid object
+    if end == -1:
+        return "{}"
+    return response[start:end+1].strip()
+
 def extract_action_data(user_query):
     prompt = f"""
 You are an expert at analyzing user requests for APIs. Given the following user query, extract:
@@ -248,10 +275,7 @@ Respond in JSON:
     response = call_model(prompt)
     try:
         # Parse the JSON from the response
-        if "```json" in response:
-            json_str = response.split("```json")[-1].split("```")[0].strip()
-        else:
-            json_str = response.strip()
+        json_str = extract_json_from_response(response)
         return json.loads(json_str)
     except Exception as e:
         print("Failed to parse Claude extraction:", e)
@@ -340,15 +364,42 @@ def make_api_call(method, api_path, payload=None, headers=None):
     Returns the response JSON and status.
     """
     try:
+        # Get API configuration from environment variables
+        api_host = os.getenv('API_HOST', 'https://httpbin.org')
+        api_key = os.getenv('API_KEY')
+        
+        # Construct full URL
+        if api_path.startswith('http'):
+            full_url = api_path
+        else:
+            full_url = f"{api_host.rstrip('/')}{api_path}"
+        
         if headers is None:
             headers = {
-                "Content-Type": "application/json",
-                "Authorization": "Bearer YOUR_API_KEY"
+                "Content-Type": "application/json"
             }
         
-        response = requests.request(method, api_path, json=payload, headers=headers)
+        # Add authorization header if API key is available
+        if api_key:
+            headers["Authorization"] = f"Token {api_key}"
+        
+        print(f"Making API call: {method} {full_url}")
+        print(f"Headers: {headers}")
+        if payload:
+            print(f"Payload: {json.dumps(payload, indent=2)}")
+        
+        response = requests.request(method, full_url, json=payload, headers=headers)
         response.raise_for_status()
-        return response.json(), response.status_code
+        
+        # Try to parse JSON response
+        try:
+            response_data = response.json()
+        except json.JSONDecodeError:
+            response_data = {"text": response.text}
+        
+        print(f"API call successful: {response.status_code}")
+        return response_data, response.status_code
+        
     except requests.exceptions.RequestException as e:
         print(f"Error making API call: {e}")
         return None, None
@@ -386,9 +437,9 @@ def suggest_next_best_item(current_item, user_query):
       }}
       """
       response = call_model(prompt)
-      # parse the response to json, remove any ```json to the response. It should be a valid JSON string.
-      response = response.replace("```json", "").replace("```", "")
-      return json.loads(response)
+      # parse the response to json using the extraction function
+      json_str = extract_json_from_response(response)
+      return json.loads(json_str)
     except Exception as e:
         print("Error in suggest_next_best_item", e)
         return None

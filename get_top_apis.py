@@ -443,7 +443,7 @@ def visualize_embeddings(query, index, metadata, tfidf_matrix, vectorizer, top_i
     plt.show()
 
 # Load model
-MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+MODEL_NAME = "sentence-transformers/all-mpnet-base-v2"
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 model = AutoModel.from_pretrained(MODEL_NAME)
 
