@@ -5,7 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>API Requester</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --primary-color: #007bff; /* A modern blue */
+            --secondary-color: #6c757d;
+            --accent-color: #28a745; /* Green for success */
+            --warning-color: #ffc107; /* Orange for warning */
+            --danger-color: #dc3545; /* Red for error */
+            --background-light: #f8f9fa;
+            --background-dark: #e9ecef;
+            --text-dark: #212529;
+            --text-light: #ffffff;
+            --border-color: #dee2e6;
+            --card-background: rgba(255, 255, 255, 0.85); /* Slightly transparent white */
+            --shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            --border-radius: 12px;
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -13,39 +30,53 @@
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f2f5; /* Fallback color */
+            background-image: url('https://images.unsplash.com/photo-1500964757637-c85e8a162699?fm=jpg&q=60&w=3000&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8M3x8YmVhdXRpZnVsJTIwYmFja2dyb3VuZHxlbnwwfHwwfHx8MA%3D%3D'); /* Replace with your image URL */
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed; /* Keeps background fixed during scroll */
             min-height: 100vh;
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
             padding: 20px;
+            color: var(--text-dark);
         }
 
         .container {
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            background: var(--card-background);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
             width: 100%;
-            max-width: 800px;
+            max-width: 900px; /* Slightly wider */
             overflow: hidden;
+            margin-bottom: 20px;
+            backdrop-filter: blur(10px); /* Frosted glass effect */
+            -webkit-backdrop-filter: blur(10px); /* For Safari */
+            border: 1px solid rgba(255, 255, 255, 0.2); /* Subtle border for clarity */
         }
 
         .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 30px;
+            background: var(--primary-color);
+            color: var(--text-light);
+            padding: 35px;
             text-align: center;
+            border-top-left-radius: var(--border-radius);
+            border-top-right-radius: var(--border-radius);
         }
 
         .header h1 {
-            font-size: 2.5rem;
-            margin-bottom: 10px;
+            font-size: 2.8rem;
+            margin-bottom: 12px;
+            font-weight: 700;
         }
 
         .header p {
-            opacity: 0.9;
-            font-size: 1.1rem;
+            opacity: 0.95;
+            font-size: 1.2rem;
+            font-weight: 300;
         }
 
         .content {
@@ -57,64 +88,123 @@
         }
 
         .input-group {
-            margin-bottom: 20px;
+            margin-bottom: 25px;
         }
 
         label {
             display: block;
-            margin-bottom: 8px;
+            margin-bottom: 10px;
             font-weight: 600;
-            color: #333;
+            color: var(--text-dark);
+            font-size: 1.05rem;
         }
 
         input[type="text"], textarea {
             width: 100%;
             padding: 15px;
-            border: 2px solid #e1e5e9;
-            border-radius: 10px;
-            font-size: 16px;
-            transition: border-color 0.3s ease;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+            font-family: 'Inter', sans-serif;
         }
 
         input[type="text"]:focus, textarea:focus {
             outline: none;
-            border-color: #667eea;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
         }
 
         textarea {
             resize: vertical;
-            min-height: 120px;
-            font-family: inherit;
+            min-height: 140px;
         }
 
         .btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            background-color: var(--primary-color);
+            color: var(--text-light);
             border: none;
-            padding: 15px 30px;
-            border-radius: 10px;
-            font-size: 16px;
+            padding: 16px 30px;
+            border-radius: 8px;
+            font-size: 1rem;
             font-weight: 600;
             cursor: pointer;
-            transition: transform 0.2s ease;
+            transition: background-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
             width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
         }
 
         .btn:hover {
+            background-color: #0056b3;
             transform: translateY(-2px);
+            box-shadow: 0 6px 15px rgba(0, 123, 255, 0.25);
         }
 
         .btn:disabled {
             opacity: 0.6;
             cursor: not-allowed;
             transform: none;
+            box-shadow: none;
         }
+
+        .btn.secondary {
+            background-color: var(--secondary-color);
+        }
+
+        .btn.secondary:hover {
+            background-color: #5a6268;
+            box-shadow: 0 6px 15px rgba(108, 117, 125, 0.25);
+        }
+
+        .btn.suggestion {
+            background-color: #e9ecef;
+            color: var(--text-dark);
+            border: 1px solid var(--border-color);
+            margin: 5px;
+            display: inline-block;
+            width: auto;
+            font-size: 0.9rem;
+            padding: 10px 15px;
+        }
+
+        .btn.suggestion:hover {
+            background-color: #dee2e6;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .btn.success {
+            background-color: var(--accent-color);
+        }
+
+        .btn.success:hover {
+            background-color: #218838;
+            box-shadow: 0 6px 15px rgba(40, 167, 69, 0.25);
+        }
+
+        .btn.warning {
+            background-color: var(--warning-color);
+            color: var(--text-dark); /* Dark text for warning background */
+        }
+
+        .btn.warning:hover {
+            background-color: #e0a800;
+            box-shadow: 0 6px 15px rgba(255, 193, 7, 0.25);
+        }
+
 
         .status {
             padding: 15px;
-            border-radius: 10px;
+            border-radius: 8px;
             margin-bottom: 20px;
             font-weight: 500;
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
 
         .status.connected {
@@ -136,84 +226,211 @@
         }
 
         .result {
-            background: #f8f9fa;
-            border: 1px solid #e9ecef;
-            border-radius: 10px;
-            padding: 20px;
-            margin-top: 20px;
+            background: var(--background-light);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 30px;
+            margin-top: 25px;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
         }
 
         .result h3 {
-            color: #333;
-            margin-bottom: 15px;
+            color: var(--primary-color);
+            margin-bottom: 20px;
+            font-size: 1.6rem;
+            font-weight: 600;
         }
 
-        .curl-command {
+        .result h4 {
+            color: var(--text-dark);
+            margin: 25px 0 15px 0;
+            font-size: 1.3rem;
+            font-weight: 600;
+        }
+
+        .curl-command, pre {
             background: #2d3748;
             color: #e2e8f0;
-            padding: 15px;
+            padding: 18px;
             border-radius: 8px;
-            font-family: 'Courier New', monospace;
-            font-size: 14px;
+            font-family: 'Fira Code', 'Courier New', monospace; /* More modern monospace font */
+            font-size: 0.95rem;
             overflow-x: auto;
-            margin: 10px 0;
+            margin: 15px 0;
+            white-space: pre-wrap; /* Ensures wrapping */
+            word-break: break-all; /* Breaks long words */
         }
 
         .missing-fields {
             background: #fff3cd;
             border: 1px solid #ffeaa7;
-            border-radius: 10px;
-            padding: 20px;
-            margin-top: 20px;
+            border-radius: var(--border-radius);
+            padding: 30px;
+            margin-top: 25px;
         }
 
         .missing-fields h3 {
             color: #856404;
-            margin-bottom: 15px;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+        }
+
+        .missing-fields p {
+            margin-bottom: 20px;
+            line-height: 1.6;
         }
 
         .field-input {
-            margin-bottom: 15px;
+            margin-bottom: 20px;
         }
 
         .field-input label {
             display: block;
-            margin-bottom: 5px;
+            margin-bottom: 8px;
             font-weight: 600;
             color: #856404;
+            font-size: 1rem;
         }
 
         .field-input label.nested {
-            color: #d63384;
-            font-size: 0.9em;
+            color: #a05a00; /* Darker orange for nested labels */
+            font-size: 0.95em;
+            font-weight: 500;
         }
 
         .field-input input {
             width: 100%;
-            padding: 10px;
+            padding: 12px;
             border: 1px solid #ffeaa7;
-            border-radius: 5px;
-            font-size: 14px;
+            border-radius: 6px;
+            font-size: 0.95rem;
         }
 
         .hidden {
             display: none;
         }
 
+        /* Modern Loader */
         .loading {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #667eea;
+            width: 24px;
+            height: 24px;
             border-radius: 50%;
-            animation: spin 1s linear infinite;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top-color: var(--text-light);
+            animation: spin 0.8s linear infinite;
+            position: relative;
             margin-right: 10px;
+            flex-shrink: 0;
+        }
+
+        .loading::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: var(--text-light);
+            transform: translate(-50%, -50%);
+            animation: spin 0.8s linear infinite reverse;
         }
 
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
+        }
+
+        .footer {
+            margin-top: 30px;
+            font-size: 0.9rem;
+            color: var(--secondary-color);
+            text-align: center;
+        }
+
+        .footer a {
+            color: var(--primary-color);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        .step-item {
+            margin-bottom: 18px;
+            padding: 20px;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            background: var(--card-background);
+            transition: all 0.2s ease-in-out;
+        }
+
+        .step-item:hover {
+            border-color: var(--primary-color);
+            box-shadow: 0 4px 10px rgba(0, 123, 255, 0.1);
+        }
+
+        .step-item h4 {
+            margin: 0 0 10px 0;
+            color: var(--primary-color);
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .step-item p {
+            margin: 0 0 8px 0;
+            color: var(--secondary-color);
+            font-size: 0.95em;
+            line-height: 1.5;
+        }
+
+        details {
+            margin-top: 15px;
+            background: var(--background-dark);
+            border-radius: 8px;
+            padding: 10px 15px;
+            border: 1px solid #d0d0d0;
+        }
+
+        summary {
+            cursor: pointer;
+            color: var(--primary-color);
+            font-weight: 500;
+            list-style: none; /* Hide default triangle */
+        }
+
+        summary::-webkit-details-marker {
+            display: none;
+        }
+
+        summary:before {
+            content: '▶️'; /* Custom arrow */
+            margin-right: 8px;
+            transition: transform 0.2s ease;
+            display: inline-block;
+        }
+
+        details[open] > summary:before {
+            transform: rotate(90deg);
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2rem;
+            }
+            .header p {
+                font-size: 1rem;
+            }
+            .content {
+                padding: 25px;
+            }
+            .btn {
+                padding: 14px 20px;
+            }
         }
     </style>
 </head>
@@ -235,48 +452,17 @@
                     ></textarea>
                 </div>
                 
-                <div style="display: flex; gap: 10px;">
-                    <button id="submitBtn" class="btn" style="flex: 1; display: none;">
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button id="submitBtn" class="btn" style="flex: 1; min-width: 200px; display: none;">
                         <span id="btnText">Generate API Call</span>
                         <span id="loadingSpinner" class="loading hidden"></span>
                     </button>
-                    <button id="multipleRequestsBtn" class="btn" style="flex: 1; background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);">
-                        <span id="multipleBtnText">Execute</span>
+                    <button id="multipleRequestsBtn" class="btn success" style="flex: 1; min-width: 200px;">
+                        <span id="multipleBtnText">Execute Multiple Steps</span>
                         <span id="multipleLoadingSpinner" class="loading hidden"></span>
                     </button>
                 </div>
             </div>
-
-            <!-- CSV Upload Section -->
-            <!-- <div class="input-section" style="border-top: 2px solid #e1e5e9; padding-top: 30px; margin-top: 30px;">
-                <h3 style="color: #333; margin-bottom: 20px; font-size: 1.3rem;">📁 Upload CSV File</h3>
-                
-                <div class="input-group">
-                    <label for="csvFile">Select CSV File</label>
-                    <input 
-                        type="file" 
-                        id="csvFile" 
-                        accept=".csv"
-                        style="padding: 10px; border: 2px dashed #667eea; border-radius: 10px; background: #f8f9fa;"
-                    >
-                </div>
-                
-                <div class="input-group">
-                    <label for="eventId">Event ID (Required)</label>
-                    <input 
-                        type="text" 
-                        id="eventId" 
-                        placeholder="Enter the event ID where you want to upload the CSV"
-                    >
-                </div>
-                
-                <button id="uploadCsvBtn" class="btn" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
-                    <span id="uploadBtnText">Upload CSV</span>
-                    <span id="uploadLoadingSpinner" class="loading hidden"></span>
-                </button>
-                
-                <div id="uploadStatus" class="status hidden"></div>
-            </div> -->
 
             <div id="status" class="status hidden"></div>
             
@@ -293,7 +479,7 @@
                 <h3>📝 Additional Information Needed for Step <span id="missingStepNumber"></span></h3>
                 <p id="multipleMissingFieldsMessage"></p>
                 <div id="multipleMissingFieldsInputs"></div>
-                <button id="submitMultipleMissingBtn" class="btn" style="margin-top: 15px;">
+                <button id="submitMultipleMissingBtn" class="btn success" style="margin-top: 15px;">
                     Continue Execution
                 </button>
             </div>
@@ -302,17 +488,17 @@
                 <h3>📋 Execution Plan</h3>
                 <div id="planDescription"></div>
                 <div id="planSteps"></div>
-                <div style="display: flex; gap: 10px; margin-top: 20px;">
-                    <button id="approvePlanBtn" class="btn" style="flex: 1; background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
+                <div style="display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap;">
+                    <button id="approvePlanBtn" class="btn success" style="flex: 1; min-width: 200px;">
                         ✅ Approve & Execute
                     </button>
-                    <button id="modifyPlanBtn" class="btn" style="flex: 1; background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);">
+                    <button id="modifyPlanBtn" class="btn warning" style="flex: 1; min-width: 200px;">
                         🔧 Modify Plan
                     </button>
                 </div>
                 <div id="planModification" class="hidden" style="margin-top: 20px;">
                     <textarea id="modificationFeedback" placeholder="Describe how you'd like to modify the plan..." rows="3" style="width: 100%; margin-bottom: 10px;"></textarea>
-                    <button id="submitModificationBtn" class="btn" style="background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);">
+                    <button id="submitModificationBtn" class="btn secondary">
                         Submit Modification
                     </button>
                 </div>
@@ -332,7 +518,16 @@
                 <h3>✅ Generated API Call</h3>
                 <div id="resultContent"></div>
             </div>
+
+            <div id="suggestions" class="result hidden">
+                <h3>💡 What would you like to do next?</h3>
+                <div id="suggestionsContent"></div>
+            </div>
         </div>
+    </div>
+
+    <div class="footer">
+        Made by <a href="https://github.com/rajat-0206" target="_blank">Rajat Shrivastava</a>
     </div>
 
     <script>
@@ -362,29 +557,6 @@
         socket.on('error', (data) => {
             showStatus(data.message, 'error');
             hideLoading();
-            hideUploadLoading();
-        });
-
-        // Handle upload success
-        socket.on('upload_success', (data) => {
-            hideUploadLoading();
-            showUploadStatus(data.message || 'CSV uploaded successfully!', 'connected');
-            // Clear form fields
-            clearUploadForm();
-            // Auto-hide success message after 5 seconds
-            setTimeout(() => {
-                document.getElementById('uploadStatus').classList.add('hidden');
-            }, 5000);
-        });
-
-        // Handle upload errors
-        socket.on('upload_error', (data) => {
-            hideUploadLoading();
-            showUploadStatus(data.message || 'Upload failed', 'error');
-            // Auto-hide error message after 8 seconds
-            setTimeout(() => {
-                document.getElementById('uploadStatus').classList.add('hidden');
-            }, 8000);
         });
 
         // Handle missing fields
@@ -422,6 +594,13 @@
             showMultipleRequestsResult(data);
         });
 
+        // Handle next best items suggestions
+        socket.on('next_best_items', (data) => {
+            if (data.suggestions && data.suggestions.length > 0) {
+                showNextBestItems(data.suggestions);
+            }
+        });
+
         // Submit button click
         document.getElementById('submitBtn').addEventListener('click', () => {
             const query = document.getElementById('query').value.trim();
@@ -436,6 +615,7 @@
             hideMultipleRequestsMissingFields();
             hideExecutionPlan();
             hideExecutionProgress();
+            hideSuggestions();
             
             socket.emit('api_request', { query: query });
         });
@@ -454,6 +634,7 @@
             hideMultipleRequestsMissingFields();
             hideExecutionPlan();
             hideExecutionProgress();
+            hideSuggestions();
             
             socket.emit('multiple_requests', { query: query });
         });
@@ -566,7 +747,7 @@
             showMultipleLoading();
             document.getElementById('planModification').classList.add('hidden');
             document.getElementById('modificationFeedback').value = '';
-            showImprovingPlanMessage(); // <-- Add this line
+            showImprovingPlanMessage();
             
             socket.emit('modify_execution_plan', {
                 plan: plan,
@@ -575,52 +756,10 @@
             });
         });
 
-        // CSV Upload button click
-        document.getElementById('uploadCsvBtn').addEventListener('click', () => {
-            const csvFile = document.getElementById('csvFile').files[0];
-            const eventId = document.getElementById('eventId').value.trim();
-            
-            if (!csvFile) {
-                showUploadStatus('Please select a CSV file', 'error');
-                return;
-            }
-            
-            if (!eventId) {
-                showUploadStatus('Please enter an Event ID', 'error');
-                return;
-            }
-            
-            if (!csvFile.name.toLowerCase().endsWith('.csv')) {
-                showUploadStatus('Please select a valid CSV file', 'error');
-                return;
-            }
-            
-            showUploadLoading();
-            
-            // Read the CSV file
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const csvContent = e.target.result;
-                
-                // Emit the upload_csv event
-                socket.emit('upload_csv', {
-                    csv_file: csvContent,
-                    event_id: eventId
-                });
-            };
-            
-            reader.onerror = function() {
-                showUploadStatus('Error reading CSV file', 'error');
-                hideUploadLoading();
-            };
-            
-            reader.readAsText(csvFile);
-        });
-
         // Enter key in textarea
         document.getElementById('query').addEventListener('keypress', (e) => {
             if (e.key === 'Enter' && e.ctrlKey) {
-                document.getElementById('submitBtn').click();
+                document.getElementById('multipleRequestsBtn').click(); // Changed to trigger 'Execute Multiple Steps'
             }
         });
 
@@ -650,28 +789,9 @@
         }
 
         function hideMultipleLoading() {
-            document.getElementById('multipleBtnText').textContent = 'Multiple Requests';
+            document.getElementById('multipleBtnText').textContent = 'Execute Multiple Steps';
             document.getElementById('multipleLoadingSpinner').classList.add('hidden');
             document.getElementById('multipleRequestsBtn').disabled = false;
-        }
-
-        function showUploadStatus(message, type) {
-            const uploadStatusEl = document.getElementById('uploadStatus');
-            uploadStatusEl.textContent = message;
-            uploadStatusEl.className = `status ${type}`;
-            uploadStatusEl.classList.remove('hidden');
-        }
-
-        function showUploadLoading() {
-            document.getElementById('uploadBtnText').textContent = 'Uploading...';
-            document.getElementById('uploadLoadingSpinner').classList.remove('hidden');
-            document.getElementById('uploadCsvBtn').disabled = true;
-        }
-
-        function hideUploadLoading() {
-            document.getElementById('uploadBtnText').textContent = 'Upload CSV';
-            document.getElementById('uploadLoadingSpinner').classList.add('hidden');
-            document.getElementById('uploadCsvBtn').disabled = false;
         }
 
         function showMissingFields(missingFields, params, api, action, requestMethod, userInput) {
@@ -760,7 +880,7 @@
                 <p><strong>API Path:</strong> ${data.api_path}</p>
                 <p><strong>Method:</strong> ${data.method}</p>
                 <p><strong>Payload:</strong></p>
-                <pre style="background: #f8f9fa; padding: 10px; border-radius: 5px; overflow-x: auto;">${JSON.stringify(data.payload, null, 2)}</pre>
+                <pre>${JSON.stringify(data.payload, null, 2)}</pre>
                 <p><strong>cURL Command:</strong></p>
                 <div class="curl-command">${data.curl_command}</div>
             `;
@@ -773,7 +893,7 @@
         }
 
         function showExecutionPlan(plan, userInput) {
-            hideImprovingPlanMessage(); // <-- Add this line at the start
+            hideImprovingPlanMessage();
             window.currentPlan = plan;
             window.currentUserInput = userInput;
             
@@ -782,7 +902,7 @@
             const steps = document.getElementById('planSteps');
             
             description.innerHTML = `
-                <p style="margin-bottom: 20px; padding: 15px; background: #e3f2fd; border-radius: 8px; border-left: 4px solid #2196f3;">
+                <p style="margin-bottom: 20px; padding: 18px; background: #e3f2fd; border-radius: 8px; border-left: 5px solid #2196f3; font-size: 1.1rem; font-weight: 500;">
                     <strong>Plan Description:</strong> ${plan.description}
                 </p>
             `;
@@ -791,26 +911,17 @@
             plan.steps.forEach(step => {
                 const stepDiv = document.createElement('div');
                 stepDiv.className = 'step-item';
-                stepDiv.style.cssText = `
-                    margin-bottom: 15px;
-                    padding: 15px;
-                    border: 1px solid #e1e5e9;
-                    border-radius: 8px;
-                    background: #f8f9fa;
-                `;
                 
                 const dependencies = step.depends_on && step.depends_on.length > 0 
                     ? ` (Depends on: ${step.depends_on.join(', ')})` 
                     : '';
                 
                 stepDiv.innerHTML = `
-                    <h4 style="margin: 0 0 10px 0; color: #333;">
-                        Step ${step.step_number}: ${step.description}
-                    </h4>
-                    <p style="margin: 0 0 8px 0; color: #666; font-size: 0.9em;">
+                    <h4>Step ${step.step_number}: ${step.description}</h4>
+                    <p>
                         <strong>API Description:</strong> ${step.api_description}${dependencies}
                     </p>
-                    <p style="margin: 0; color: #666; font-size: 0.9em;">
+                    <p>
                         <strong>Expected Result:</strong> ${step.expected_result}
                     </p>
                 `;
@@ -851,30 +962,31 @@
             stepDiv.style.cssText = `
                 margin-bottom: 15px;
                 padding: 15px;
-                border: 1px solid #e1e5e9;
+                border: 1px solid var(--border-color);
                 border-radius: 8px;
-                background: #f8f9fa;
+                background: var(--background-light);
                 border-left: 4px solid ${statusColor};
             `;
             
             stepDiv.innerHTML = `
-                <h4 style="margin: 0 0 10px 0; color: #333;">
+                <h4 style="margin: 0 0 10px 0; color: ${statusColor};">
                     ${statusIcon} Step ${stepData.step_number}: ${stepData.description}
                 </h4>
-                <p style="margin: 0 0 8px 0; color: #666; font-size: 0.9em;">
+                <p style="margin: 0 0 8px 0; color: var(--text-dark); font-size: 0.95em;">
                     <strong>Status:</strong> ${stepData.status}
                 </p>
-                ${stepData.error ? `<p style="margin: 0; color: #dc3545; font-size: 0.9em;"><strong>Error:</strong> ${stepData.error}</p>` : ''}
+                ${stepData.error ? `<p style="margin: 0; color: var(--danger-color); font-size: 0.9em;"><strong>Error:</strong> ${stepData.error}</p>` : ''}
                 ${stepData.result && stepData.result.response ? `
                     <details style="margin-top: 10px;">
-                        <summary style="cursor: pointer; color: #007bff;">View Response</summary>
-                        <pre style="background: #f8f9fa; padding: 10px; border-radius: 5px; margin-top: 8px; overflow-x: auto; font-size: 0.8em;">${JSON.stringify(stepData.result.response, null, 2)}</pre>
+                        <summary style="cursor: pointer; color: var(--primary-color);">View Response</summary>
+                        <pre style="background: #e9ecef; padding: 10px; border-radius: 5px; margin-top: 8px; overflow-x: auto; font-size: 0.85em;">${JSON.stringify(stepData.result.response, null, 2)}</pre>
                     </details>
                 ` : ''}
             `;
             
             stepResults.appendChild(stepDiv);
             currentStep.innerHTML = `<p>Completed step ${stepData.step_number}. ${stepData.status === 'success' ? '✅' : '❌'}</p>`;
+            stepResults.scrollTop = stepResults.scrollHeight; // Scroll to bottom
         }
 
         function showMultipleRequestsResult(data) {
@@ -882,12 +994,12 @@
             const content = document.getElementById('resultContent');
             
             let resultHtml = `
-                <h4 style="margin-bottom: 15px; color: #333;">📋 Execution Summary</h4>
-                <p><strong>Plan Description:</strong> ${data.results.plan_description}</p>
-                <p><strong>Final Result:</strong> ${data.results.final_result}</p>
-                <p><strong>Overall Status:</strong> ${data.results.overall_status}</p>
+                <h4 style="margin-bottom: 15px; color: var(--primary-color);">📋 Execution Summary</h4>
+                <p style="margin-bottom: 8px;"><strong>Plan Description:</strong> ${data.results.plan_description}</p>
+                <p style="margin-bottom: 8px;"><strong>Final Result:</strong> ${data.results.final_result}</p>
+                <p style="margin-bottom: 20px;"><strong>Overall Status:</strong> ${data.results.overall_status}</p>
                 
-                <h4 style="margin: 20px 0 15px 0; color: #333;">📊 Step Results</h4>
+                <h4 style="margin: 20px 0 15px 0; color: var(--primary-color);">📊 Step Results</h4>
             `;
             
             data.results.step_results.forEach(step => {
@@ -895,21 +1007,21 @@
                 const statusColor = step.status === 'success' ? '#28a745' : '#dc3545';
                 
                 resultHtml += `
-                    <div style="margin-bottom: 15px; padding: 15px; border: 1px solid #e1e5e9; border-radius: 8px; background: #f8f9fa; border-left: 4px solid ${statusColor};">
-                        <h5 style="margin: 0 0 10px 0; color: #333;">
+                    <div style="margin-bottom: 15px; padding: 15px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--background-light); border-left: 4px solid ${statusColor};">
+                        <h5 style="margin: 0 0 10px 0; color: ${statusColor}; font-size: 1.1rem;">
                             ${statusIcon} Step ${step.step_number}: ${step.description}
                         </h5>
-                        <p style="margin: 0 0 8px 0; color: #666; font-size: 0.9em;">
+                        <p style="margin: 0 0 8px 0; color: var(--text-dark); font-size: 0.95em;">
                             <strong>Status:</strong> ${step.status}
                         </p>
-                        <p style="margin: 0 0 8px 0; color: #666; font-size: 0.9em;">
+                        <p style="margin: 0 0 8px 0; color: var(--text-dark); font-size: 0.95em;">
                             <strong>API Description:</strong> ${step.api_description}
                         </p>
-                        ${step.error ? `<p style="margin: 0; color: #dc3545; font-size: 0.9em;"><strong>Error:</strong> ${step.error}</p>` : ''}
+                        ${step.error ? `<p style="margin: 0; color: var(--danger-color); font-size: 0.9em;"><strong>Error:</strong> ${step.error}</p>` : ''}
                         ${step.result && step.result.response ? `
                             <details style="margin-top: 10px;">
-                                <summary style="cursor: pointer; color: #007bff;">View Response</summary>
-                                <pre style="background: #f8f9fa; padding: 10px; border-radius: 5px; margin-top: 8px; overflow-x: auto; font-size: 0.8em;">${JSON.stringify(step.result.response, null, 2)}</pre>
+                                <summary style="cursor: pointer; color: var(--primary-color);">View Response</summary>
+                                <pre style="background: #e9ecef; padding: 10px; border-radius: 5px; margin-top: 8px; overflow-x: auto; font-size: 0.85em;">${JSON.stringify(step.result.response, null, 2)}</pre>
                             </details>
                         ` : ''}
                     </div>
@@ -933,10 +1045,27 @@
             document.getElementById('modifyPlanBtn').classList.remove('hidden');
         }
 
-        function clearUploadForm() {
-            document.getElementById('csvFile').value = '';
-            document.getElementById('eventId').value = '';
+        function showNextBestItems(suggestions) {
+            const container = document.getElementById('suggestions');
+            const content = document.getElementById('suggestionsContent');
+            
+            const suggestionsHtml = suggestions.map(suggestion => 
+                `<button class="btn secondary" style="margin: 5px; display: inline-block; width: auto;" onclick="useSuggestion('${suggestion.replace(/'/g, "\\'")}')">${suggestion}</button>`
+            ).join('');
+            
+            content.innerHTML = suggestionsHtml;
+            container.classList.remove('hidden');
+        }
+
+        function hideSuggestions() {
+            document.getElementById('suggestions').classList.add('hidden');
+        }
+
+        function useSuggestion(suggestion) {
+            document.getElementById('query').value = suggestion;
+            // Optionally auto-trigger the request
+            // document.getElementById('multipleRequestsBtn').click();
         }
     </script>
 </body>
-</html> 
+</html>

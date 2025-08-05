@@ -1,7 +1,3 @@
-"""
-Index utilities for building and managing API search indices.
-"""
-
 import json
 import torch
 import faiss

@@ -1,7 +1,3 @@
-"""
-Visualization Service - Handles API search visualization and analysis.
-"""
-
 import json
 import matplotlib.pyplot as plt
 from sklearn.manifold import TSNE

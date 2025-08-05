@@ -8,14 +8,14 @@ import time
 from services.search import APISearchService
 from services.multiple_requests import MultipleRequestsService
 from services.visualization import VisualizationService
+from services.single_request import SingleRequestService
+from handlers import SingleRequestHandlers
 
 from utils import (
     sanitize_api_url,
     sanitize_api_params,
     make_api_call,
-    suggest_next_best_item,
     update_nested_dict,
-    extract_action_data,
 )
 
 app = Flask(__name__)
@@ -25,6 +25,8 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 search_service = APISearchService(search_model="faiss")
 multiple_requests_service = MultipleRequestsService(search_service)
 visualization_service = VisualizationService(search_service)
+single_request_service = SingleRequestService(search_service)
+single_request_handlers = SingleRequestHandlers(single_request_service)
 
 @app.route('/')
 def index_page():
@@ -53,79 +55,20 @@ def handle_disconnect():
 
 @socketio.on('api_request')
 def handle_api_request(data):
-    """Handle API request from frontend."""
-    try:
-        user_input = data.get('query', '').strip()
-        
-        if not user_input:
-            emit('error', {'message': 'No query provided'})
-            return
-        
-        print(f"Received request: {user_input}")
-        emit('status', {'message': 'Processing your request...', 'status': 'processing'})
-        
-        # Extract action/data/details using Claude
-        extracted = extract_action_data(user_input)
-        print("Improved user query is", extracted)
-        
-        if extracted:
-            search_text = f"{extracted.get('action', '')} {extracted.get('data', '')}".strip()
-            if not search_text:
-                search_text = user_input
-        else:
-            search_text = user_input  # fallback
-
-        emit('status', {'message': 'Finding matching API...', 'status': 'searching'})
-
-        # Search for matching API
-        matched_api = search_service.search_api(user_input)
-        print("Matched API: ", matched_api["method"], matched_api["path"])
-        emit('status', {'message': f'Found API: {matched_api["path"]}', 'status': 'found_api'})
-        
-        emit('status', {'message': 'Generating API payload...', 'status': 'generating'})
-        
-        # Use the search service to process the request
-        result = search_service.process_api_request(user_input)
-        
-        if result.get('missing_fields'):
-            emit('missing_fields', {
-                'message': 'Some required fields are missing',
-                'missing_fields': result['missing_fields'],
-                'current_params': result['current_params'],
-                'matched_api': result['matched_api'],
-                'request_method': result['request_method'],
-                'action': result['action'],
-                'user_input': result['user_input']
-            })
-            return
-        
-        if result.get('error'):
-            emit('error', {'message': result['error']})
-            return
-        
-        if result.get('status') == 'success':
-            final_response = get_final_response(
-                result['action'], 
-                result['api_path'], 
-                result['method'], 
-                result['payload']
-            )
-            emit('api_response', final_response)
-
-            time.sleep(1)
-            next_best_items = suggest_next_best_item(result['action'], user_input)
-            if next_best_items:
-                emit('next_best_items', next_best_items)
-        else:
-            emit('error', {'message': 'Failed to process request'})
-            
-    except Exception as e:
-        print(f"Error processing request: {e}")
-        print(traceback.format_exc())
-        emit('error', {'message': f'An error occurred: {str(e)}'})
+    """
+    Handler for single API requests (previous version of the agent).
+    Delegates to the SingleRequestHandlers class.
+    """
+    single_request_handlers.handle_api_request(data)
 
 @socketio.on('multiple_requests')
 def handle_multiple_requests(data):
+    '''
+    1.Can handle multiple request in a single user input.
+    2. Call AI to generate a plan where it breaks the user input
+    into seperate actions.
+    3. Return the plan to user for approval or modification.
+    '''
     try:
         user_input = data.get('query', '').strip()
         
@@ -157,7 +100,16 @@ def handle_multiple_requests(data):
 
 @socketio.on('approve_execution_plan')
 def handle_approve_execution_plan(data):
-    """Handle user approval of execution plan and start execution."""
+    """
+    1. Handle user approval of execution plan and start execution.
+    2. Plan execution is similar to executing single API request user input.
+    3. We first ask AI to break the step into data and action.
+    4. For the given action we find the best API using swaggers vector embedding.
+    5. Then we give the best matched API and data from step 3 to AI again to return a payload.
+    6. If some field is missing we ask user to provide them.
+    7. If field is not missing we execute the API using admin token and store the result.
+    8. The stored result is used as context for next step of plan.
+    """
     try:
         plan = data.get('plan', {})
         user_input = data.get('user_input', '')
@@ -168,8 +120,12 @@ def handle_approve_execution_plan(data):
         
         emit('status', {'message': 'Starting execution of approved plan...', 'status': 'executing'})
         
-        # Execute the plan step by step
-        results = multiple_requests_service.execute_plan_steps(plan, user_input)
+        # Create a callback function to emit WebSocket messages
+        def emit_callback(event, data):
+            emit(event, data)
+        
+        # Execute the plan step by step with real-time updates
+        results = multiple_requests_service.execute_plan_steps(plan, user_input, emit_callback)
         
         # Check if execution was paused due to missing fields
         if results.get('missing_fields'):
@@ -250,53 +206,24 @@ def handle_multiple_requests_missing_fields(data):
         print(f"Providing missing fields for step {step_number}")
         print("Provided fields:", provided_fields)
         
-        # Use the same logic as handle_missing_fields
-        updated_params = update_nested_dict(current_params, provided_fields)
-        
-        if request_method == "GET":
-            api = matched_api + "?" + "&".join([f"{key}={value}" for key, value in updated_params.items()])
-        else:
-            api = matched_api
-        
-        # Make the API call
-        sanitized_path = sanitize_api_url(api)
-        sanitized_params = json.loads(sanitize_api_params(updated_params))
-        
-        response_data, status_code = make_api_call(
-            request_method, 
-            sanitized_path, 
-            sanitized_params
-        )
-        
-        if status_code > 299:
-            emit('error', {'message': f'API call failed for step {step_number}: {status_code}: {response_data}'})
+        # Find the current step
+        current_step = next((s for s in plan.get('steps', []) if s.get('step_number') == step_number), None)
+        if not current_step:
+            emit('error', {'message': f'Step {step_number} not found in plan'})
             return
         
-        # Create step result
-        step_result = {
-            'action': f'Step {step_number}',
-            'api_path': api,
-            'method': request_method,
-            'payload': sanitized_params,
-            'response': response_data,
-            'status_code': status_code,
-            'status': 'success',
-            'step_number': step_number,
-            'step_description': data.get('step_description', ''),
-            'api_description': data.get('api_description', '')
-        }
-        
-        # Store result for future steps
-        step = next((s for s in plan.get('steps', []) if s.get('step_number') == step_number), None)
-        if step and step.get('result_key'):
-            previous_results[step.get('result_key')] = step_result
+        # Execute the step with provided fields using the service
+        step_result = multiple_requests_service.execute_step_with_missing_fields(
+            current_step, provided_fields, current_params, matched_api, 
+            request_method, previous_results, user_input
+        )
         
         # Add to completed steps
         completed_steps.append({
             'step_number': step_number,
             'description': data.get('step_description', ''),
             'api_description': data.get('api_description', ''),
-            'status': 'success',
+            'status': 'success' if step_result and step_result.get('status') == 'success' else 'failed',
             'result': step_result
         })
         
@@ -306,15 +233,20 @@ def handle_multiple_requests_missing_fields(data):
             'description': data.get('step_description', ''),
             'api_description': data.get('api_description', ''),
             'result': step_result,
-            'status': 'success'
+            'status': 'success' if step_result and step_result.get('status') == 'success' else 'failed'
         })
         
         # Continue execution from the next step
         emit('status', {'message': f'Step {step_number} completed. Continuing execution...', 'status': 'executing_step'})
         
-        # Resume execution from the next step
+        # Resume execution from the next step with real-time updates
         remaining_steps = [s for s in plan.get('steps', []) if s.get('step_number') > step_number]
         
+        # Create a callback function to emit WebSocket messages
+        def emit_callback(event, data):
+            emit(event, data)
+        
+        # Execute remaining steps with real-time updates
         for step in remaining_steps:
             try:
                 step_num = step.get('step_number', 0)
@@ -322,7 +254,7 @@ def handle_multiple_requests_missing_fields(data):
                 api_desc = step.get('api_description', '')
                 
                 print(f"Executing step {step_num}: {step_desc}")
-                emit('status', {'message': f'Executing step {step_num}: {step_desc}', 'status': 'executing_step'})
+                emit_callback('status', {'message': f'Executing step {step_num}: {step_desc}', 'status': 'executing_step'})
                 
                 # Execute the step with updated previous results
                 step_result = multiple_requests_service.execute_single_step(step, previous_results, user_input)
@@ -349,40 +281,35 @@ def handle_multiple_requests_missing_fields(data):
                 if result_key and step_result and step_result.get('status') == 'success':
                     previous_results[result_key] = step_result
                 
-                completed_steps.append({
+                # Create step completion data
+                step_completion_data = {
                     'step_number': step_num,
                     'description': step_desc,
                     'api_description': api_desc,
                     'status': 'success' if step_result and step_result.get('status') == 'success' else 'failed',
                     'result': step_result
-                })
+                }
+                
+                if step_result and step_result.get('error'):
+                    step_completion_data['error'] = step_result['error']
+                
+                completed_steps.append(step_completion_data)
                 
                 # Send step completion update
-                emit('step_completed', {
-                    'step_number': step_num,
-                    'description': step_desc,
-                    'api_description': api_desc,
-                    'result': step_result,
-                    'status': 'success' if step_result and step_result.get('status') == 'success' else 'failed'
-                })
+                emit_callback('step_completed', step_completion_data)
                 
             except Exception as e:
                 print(f"Error executing step {step_num}: {e}")
-                completed_steps.append({
+                error_step_data = {
                     'step_number': step_num,
                     'description': step_desc,
                     'api_description': api_desc,
                     'status': 'failed',
                     'error': str(e)
-                })
+                }
                 
-                emit('step_completed', {
-                    'step_number': step_num,
-                    'description': step_desc,
-                    'api_description': api_desc,
-                    'status': 'failed',
-                    'error': str(e)
-                })
+                completed_steps.append(error_step_data)
+                emit_callback('step_completed', error_step_data)
         
         # Send final results
         emit('multiple_requests_complete', {
@@ -402,192 +329,12 @@ def handle_multiple_requests_missing_fields(data):
         print(traceback.format_exc())
         emit('error', {'message': f'An error occurred: {str(e)}'})
 
-@socketio.on('visualize_search')
-def handle_visualize_search(data):
-    """Handle search visualization request."""
-    try:
-        query = data.get('query', '').strip()
-        use_pca = data.get('use_pca', False)
-        
-        if not query:
-            emit('error', {'message': 'No query provided for visualization'})
-            return
-        
-        print(f"Visualizing search for: {query}")
-        emit('status', {'message': 'Generating visualization...', 'status': 'visualizing'})
-        
-        # Get search analysis with visualization
-        analysis = visualization_service.get_search_analysis(query, top_k=5)
-        
-        if analysis.get('error'):
-            emit('error', {'message': analysis['error']})
-            return
-        
-        # Send visualization results
-        emit('visualization_results', {
-            'query': query,
-            'results': analysis['results'],
-            'visualization': analysis['visualization'],
-            'search_model': analysis['search_model'],
-            'total_results': analysis['total_results']
-        })
-        
-    except Exception as e:
-        print(f"Error generating visualization: {e}")
-        print(traceback.format_exc())
-        emit('error', {'message': f'An error occurred: {str(e)}'})
 
 @socketio.on('provide_missing_fields')
 def handle_missing_fields(data):
-    """Handle missing fields provided by user."""
-    try:
-        provided_fields = data.get('fields', {})
-        current_params = data.get('current_params', {})
-        matched_api = data.get('matched_api', {})
-        request_method = data.get('request_method', "GET")
-        action = data.get('action', "")
-        user_input = data.get('user_input', "")
+    """Handler for missing fields provided by user (previous version of the agent)."""
+    single_request_handlers.handle_missing_fields(data)
 
-        print("request method", request_method)
-        print("matched api", matched_api)
-        print("current params", current_params)
-        print("provided fields", provided_fields)
-        print("action", action)
-        print("user input", user_input)
-        
-        # Update params with provided fields (handling nested structures)
-        updated_params = update_nested_dict(current_params, provided_fields)
-
-        if request_method == "GET":
-            api = matched_api + "?" + "&".join([f"{key}={value}" for key, value in updated_params.items()])
-        else:
-            api = matched_api
-        
-        # Make the API call
-        sanitized_path = sanitize_api_url(api)
-        sanitized_params = json.loads(sanitize_api_params(updated_params))
-        
-        response_data, status_code = make_api_call(
-            request_method, 
-            sanitized_path, 
-            sanitized_params
-        )
-        
-        if status_code > 299:
-            emit('error', {'message': f'API failed: {status_code}: {response_data}'})
-            return
-        
-        # Send final response
-        final_response = get_final_response(action, sanitized_path, request_method, sanitized_params)
-        emit('api_response', final_response)
-        time.sleep(1)
-        next_best_items = suggest_next_best_item(action, user_input)
-        if next_best_items:
-            emit('next_best_items', next_best_items)
-        
-    except Exception as e:
-        print(f"Error handling missing fields: {e}")
-        print(traceback.format_exc())
-        emit('error', {'message': f'An error occurred: {str(e)}'})
-
-@socketio.on('make_api_call')
-def handle_make_api_call(data):
-    '''
-    Make an API call to the API server
-    using requests module
-    '''
-    try:
-        response_data, status_code = make_api_call(
-            data['method'], 
-            data['api_path'], 
-            data.get('payload')
-        )
-        if status_code < 300:
-            emit('api_response', {
-                'response': response_data,
-                'status': 'success'
-            })
-        else:
-            emit('error', {'message': f'Failed to make API call: {status_code}: {response_data}'})
-    except Exception as e:
-        print(f"Error making API call: {e}")
-        emit('error', {'message': f'An error occurred: {str(e)}'})
-
-@socketio.on('upload_csv')
-def handle_upload_csv(data):
-    '''
-    Upload a csv file to the server
-    '''
-    try:
-        csv_content = data.get('csv_file')
-        event_id = data.get('event_id')
-
-        print("Uploading CSV to event", event_id)
-
-        if not csv_content:
-            emit('upload_error', {'message': 'No CSV content provided'})
-            return
-
-        if not event_id:
-            emit('upload_error', {'message': 'No event ID provided'})
-            return
-
-        # Create a temporary CSV file
-        import tempfile
-        import os
-        
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as temp_file:
-            temp_file.write(csv_content)
-            temp_file_path = temp_file.name
-
-        try:
-            print("Calling csv_uploader.js")
-            # Use subprocess to call the csv_uploader.js file
-            result = subprocess.run(
-                ['node', 'csv_uploader.js', temp_file_path, event_id], 
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True, 
-                timeout=30
-            )
-            print("Result", result)
-            
-            # Clean up the temporary file
-            os.unlink(temp_file_path)
-            
-            if result.returncode == 0:
-                emit('upload_success', {
-                    'message': f'CSV uploaded successfully for event {event_id}!',
-                    'output': result.stdout
-                })
-            else:
-                emit('upload_error', {
-                    'message': f'Failed to upload CSV: {result.stderr}',
-                    'details': result.stdout
-                })
-                
-        except subprocess.TimeoutExpired:
-            # Clean up the temporary file
-            os.unlink(temp_file_path)
-            emit('upload_error', {'message': 'Upload timed out. Please try again.'})
-        except FileNotFoundError:
-            # Clean up the temporary file
-            os.unlink(temp_file_path)
-            emit('upload_error', {'message': 'csv_uploader.js not found. Please ensure the file exists.'})
-            
-    except Exception as e:
-        print(f"Error uploading CSV: {e}")
-        print(traceback.format_exc())
-        emit('upload_error', {'message': f'An error occurred: {str(e)}'})
-
-def get_final_response(action, api_path, method, payload):
-    return {
-            'action': action,
-            'api_path': api_path,
-            'method': method,
-            'payload': payload,
-            'status': 'success'
-        }
 
 if __name__ == '__main__':
     print("✅ WebSocket Server is ready!")

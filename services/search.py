@@ -1,7 +1,3 @@
-"""
-API Search Service - Handles API search and request processing.
-"""
-
 import json
 from flask_socketio import emit
 from utils.index import (
@@ -26,7 +22,7 @@ from utils import (
     find_missing_fields_nested,
     update_nested_dict
 )
-from utils.prompts import BUILD_PROMPT, BUILD_PROMPT_WITH_CONTEXT, ENHANCE_REQUEST_WITH_CONTEXT
+from utils.prompts import BUILD_PROMPT, BUILD_PROMPT_WITH_CONTEXT
 
 class APISearchService:
     """Service for handling API search and request processing."""

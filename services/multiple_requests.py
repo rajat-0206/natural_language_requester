@@ -1,7 +1,3 @@
-"""
-Multiple Requests Service - Handles complex multi-step API requests.
-"""
-
 import json
 import traceback
 from utils import call_model, extract_json_from_response
@@ -75,8 +71,15 @@ class MultipleRequestsService:
                 'api_description': step.get('api_description', '')
             }
     
-    def execute_plan_steps(self, plan, user_input):
-        """Execute the steps in the plan sequentially."""
+    def execute_plan_steps(self, plan, user_input, emit_callback=None):
+        """
+        Execute the steps in the plan sequentially with real-time updates.
+        
+        Args:
+            plan: The execution plan
+            user_input: Original user input
+            emit_callback: Optional callback function to emit WebSocket messages
+        """
         results = {}
         step_results = []
         
@@ -87,6 +90,13 @@ class MultipleRequestsService:
                 api_desc = step.get('api_description', '')
                 
                 print(f"Executing step {step_num}: {step_desc}")
+                
+                # Send step start notification if callback provided
+                if emit_callback:
+                    emit_callback('status', {
+                        'message': f'Executing step {step_num}: {step_desc}', 
+                        'status': 'executing_step'
+                    })
                 
                 # Execute the step
                 step_result = self.execute_single_step(step, results, user_input)
@@ -113,28 +123,118 @@ class MultipleRequestsService:
                 if result_key and step_result and step_result.get('status') == 'success':
                     results[result_key] = step_result
                 
-                step_results.append({
+                # Create step completion data
+                step_completion_data = {
                     'step_number': step_num,
                     'description': step_desc,
                     'api_description': api_desc,
                     'status': 'success' if step_result and step_result.get('status') == 'success' else 'failed',
                     'result': step_result,
-                })
+                }
+                
+                if step_result and step_result.get('error'):
+                    step_completion_data['error'] = step_result['error']
+                
+                step_results.append(step_completion_data)
+                
+                # Send step completion notification if callback provided
+                if emit_callback:
+                    emit_callback('step_completed', step_completion_data)
                 
             except Exception as e:
                 print(f"Error executing step {step_num}: {e}")
-                step_results.append({
+                error_step_data = {
                     'step_number': step_num,
                     'description': step_desc,
                     'api_description': api_desc,
                     'status': 'failed',
                     'error': str(e),
-                })
+                }
+                
+                step_results.append(error_step_data)
+                
+                # Send step completion notification if callback provided
+                if emit_callback:
+                    emit_callback('step_completed', error_step_data)
         
         return {
             'plan_description': plan.get('description', ''),
             'final_result': plan.get('final_result', ''),
-            'api_description': api_desc,
+            'api_description': plan.get('api_description', ''),
             'step_results': step_results,
             'overall_status': 'completed'
-        } 
+        }
+    
+    def execute_step_with_missing_fields(self, step, provided_fields, current_params, 
+                                       matched_api, request_method, previous_results, user_input):
+        """
+        Execute a step after missing fields have been provided.
+        This is used when execution was paused due to missing fields.
+        """
+        try:
+            step_number = step.get('step_number', 0)
+            step_description = step.get('description', '')
+            api_description = step.get('api_description', '')
+            
+            # Update params with provided fields
+            from utils import update_nested_dict
+            updated_params = update_nested_dict(current_params, provided_fields)
+            
+            # Make the API call
+            from utils import sanitize_api_url, sanitize_api_params, make_api_call
+            import json
+            
+            if request_method == "GET":
+                api = matched_api + "?" + "&".join([f"{key}={value}" for key, value in updated_params.items()])
+            else:
+                api = matched_api
+            
+            sanitized_path = sanitize_api_url(api)
+            sanitized_params = json.loads(sanitize_api_params(updated_params))
+            
+            response_data, status_code = make_api_call(
+                request_method, 
+                sanitized_path, 
+                sanitized_params
+            )
+            
+            if status_code > 299:
+                return {
+                    'error': f'API call failed: {status_code}: {response_data}',
+                    'status': 'failed',
+                    'step_number': step_number,
+                    'step_description': step_description,
+                    'api_description': api_description
+                }
+            
+            # Create successful step result
+            step_result = {
+                'action': f'Step {step_number}',
+                'api_path': api,
+                'method': request_method,
+                'payload': sanitized_params,
+                'response': response_data,
+                'status_code': status_code,
+                'status': 'success',
+                'step_number': step_number,
+                'step_description': step_description,
+                'api_description': api_description
+            }
+            
+            # Store result for future steps
+            result_key = step.get('result_key')
+            if result_key:
+                previous_results[result_key] = step_result
+            
+            return step_result
+            
+        except Exception as e:
+            print(f"Error executing step with missing fields: {e}")
+            print(traceback.format_exc())
+            return {
+                'error': str(e),
+                'status': 'failed',
+                'step_number': step.get('step_number', 0),
+                'step_description': step.get('description', ''),
+                'api_description': step.get('api_description', '')
+            } 

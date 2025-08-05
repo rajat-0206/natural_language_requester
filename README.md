@@ -1,18 +1,55 @@
-# API Requester WebSocket Server
+# App Interaction Agent
 
-A real-time WebSocket server that converts natural language requests into API calls using Claude AI. Users can describe what they want to do in plain English, and the system will generate the appropriate API call with a curl command.
+An intelligent agent that helps users perform actions in your application through natural language. Instead of navigating complex interfaces or remembering specific API calls, users can simply describe what they want to do in plain English, and the agent will figure out the right actions to take.
 
-## Features
+## What It Does
 
-- 🔗 **Real-time WebSocket communication** with the frontend
-- 🤖 **Claude AI integration** for intelligent API matching and parameter generation
-- 📝 **Interactive missing field collection** when required parameters are not provided
-- 🎯 **Semantic search** to find the most relevant API endpoints
-- 📋 **cURL command generation** for easy API testing
-- 🎨 **Modern, responsive UI** with real-time status updates
-- 🔄 **Multiple Requests Support** for complex workflows with step-by-step execution
-- 📋 **Execution Planning** with user approval and modification capabilities
-- 🚀 **Context-Aware Execution** that uses results from previous steps
+The App Interaction Agent understands natural language requests and automatically performs the corresponding actions in your application. It works by:
+
+1. **Understanding Intent**: Analyzes your request to understand what you want to accomplish
+2. **Finding the Right Tools**: Uses AI-powered search to identify the appropriate API endpoints from your application's documentation
+3. **Executing Actions**: Automatically calls the right APIs with the correct parameters
+4. **Handling Complex Workflows**: Can break down complex requests into multiple steps and execute them sequentially
+
+## Capabilities
+
+### 🎯 **Single Actions**
+Perform individual tasks with simple natural language:
+- "Create an event for tomorrow at 3 PM called 'Team Meeting'"
+- "Get a user's magic link"
+- "Add a speaker to event ID 123"
+- "Create a broadcast for the upcoming webinar"
+- "Send invitations to all attendees"
+
+### 🔄 **Complex Workflows**
+Handle multi-step processes automatically:
+- "Create an event, add speakers, and send invitations"
+- "Get all events and create a broadcast for the first one"
+- "Create event, add attendees, and create a discussion group"
+- "Set up a webinar with speakers, create registration, and send reminders"
+
+### 🤖 **Intelligent Features**
+- **Context Awareness**: Uses results from previous steps to inform later actions
+- **Smart Field Detection**: Automatically identifies missing required information
+- **Interactive Refinement**: Asks for clarification when needed
+- **Real-time Progress**: Shows step-by-step execution progress
+- **Plan Review**: Lets you review and modify execution plans before running them
+
+## How It Works
+
+### For Users
+1. **Describe Your Goal**: Tell the agent what you want to accomplish in natural language
+2. **Review the Plan**: For complex requests, review the generated execution plan
+3. **Provide Missing Info**: If needed, provide any additional required information
+4. **Watch It Work**: The agent executes all the necessary actions automatically
+5. **Get Results**: Receive confirmation and results of all completed actions
+
+### Technical Architecture
+- **Natural Language Processing**: Uses AI to understand user intent
+- **Semantic Search**: Vector embeddings of your API documentation for intelligent endpoint matching
+- **Context Management**: Maintains context across multiple steps in complex workflows
+- **Real-time Communication**: WebSocket-based interface for live updates
+- **Error Handling**: Graceful handling of missing information and API errors
 
 ## Setup
 
@@ -22,7 +59,7 @@ A real-time WebSocket server that converts natural language requests into API ca
 pip install -r requirements.txt
 ```
 
-### 2. Set Environment Variables
+### 2. Configure Environment
 
 Create a `.env` file in the project directory:
 
@@ -32,304 +69,154 @@ API_KEY=your_api_key_here
 API_HOST=https://your-api-domain.com
 ```
 
-### 3. Prepare API Schema
+### 3. Prepare API Documentation
 
-Ensure you have a `schema.json` file in the project directory with your API schema. The schema should contain:
+Ensure you have a `schema.json` file with your application's API documentation. The agent uses this to understand what actions are available.
 
-```json
-{
-  "paths": {
-    "/api/endpoint": {
-      "get": {
-        "parameters": [...],
-        "requestBody": {...}
-      }
-    }
-  }
-}
-```
-
-### 4. Run the Server
+### 4. Start the Agent
 
 ```bash
-python websocket_server.py
+python server.py
 ```
 
-The server will start on `http://localhost:5000`
+The agent will be available at `http://localhost:8010`
 
-## Usage
+## Usage Examples
 
-### Web Interface
+### Simple Actions
 
-#### Single API Request
-1. Open your browser and navigate to `http://localhost:5000`
-2. Enter your request in natural language (e.g., "Create an event for tomorrow at 3 PM called 'Team Meeting' for 1 hour")
-3. Click "Generate API Call" or press Ctrl+Enter
-4. If required fields are missing, the system will prompt you to provide them
-5. View the generated API call with the curl command
+**Create an Event:**
+```
+"Create an event for tomorrow at 3 PM called 'Team Meeting' for 1 hour"
+```
 
-#### Multiple API Requests (Complex Workflows)
-1. Enter a complex request that requires multiple steps (e.g., "Create an event and add 5 attendees")
-2. Click "Multiple Requests" button
-3. Review the generated execution plan with all steps
+**Add a Speaker:**
+```
+"Add John Doe as a speaker to event ID 123"
+```
+
+**Get User Information:**
+```
+"Get magic link for user john.doe@company.com"
+```
+
+### Complex Workflows
+
+**Event Setup with Speakers and Invitations:**
+```
+"Create an event for next Friday at 2 PM called 'Product Launch', add Sarah Johnson and Mike Chen as speakers, and send invitations to the marketing team"
+```
+
+**Multi-Step Process:**
+```
+"Get all upcoming events, create a broadcast for the first one, add it to the homepage, and notify all registered users"
+```
+
+## Web Interface
+
+### Single Action Mode
+1. Enter your request in natural language
+2. Click "Generate Action" or press Ctrl+Enter
+3. If additional information is needed, the agent will ask for it
+4. View the completed action and results
+
+### Complex Workflow Mode
+1. Enter a complex request that requires multiple steps
+2. Click "Multiple Actions" button
+3. Review the generated execution plan
 4. Choose to:
    - **Approve & Execute**: Run all steps automatically
    - **Modify Plan**: Provide feedback to change the plan
 5. Watch real-time progress as each step executes
 6. View final results with all step outcomes
 
-**Example Complex Requests:**
-- "Create an event for tomorrow, add speakers, and send invitations"
-- "Get all events and create a broadcast for the first one"
-- "Create event, add attendees, and create a discussion group"
+## API Integration
 
-### WebSocket Events
+The agent communicates with your application through WebSocket events:
 
-#### Client to Server Events
+### Client to Agent Events
 
-- `api_request`: Send a natural language query
-  ```javascript
-  socket.emit('api_request', { query: 'Create an event for tomorrow' });
-  ```
-
-- `provide_missing_fields`: Provide missing required fields
-  ```javascript
-  socket.emit('provide_missing_fields', {
-    fields: { organization: 'my-org', owner: 'user123' },
-    current_params: {...},
-    matched_api: {...}
-  });
-  ```
-
-- `multiple_requests`: Request multiple API calls for complex workflows
-  ```javascript
-  socket.emit('multiple_requests', { query: 'Create event and add attendees' });
-  ```
-
+- `api_request`: Send a natural language request
+- `multiple_requests`: Request complex multi-step workflows
 - `approve_execution_plan`: Approve and execute a generated plan
-  ```javascript
-  socket.emit('approve_execution_plan', {
-    plan: {...},
-    user_input: 'Create event and add attendees'
-  });
-  ```
-
 - `modify_execution_plan`: Request modification of an execution plan
-  ```javascript
-  socket.emit('modify_execution_plan', {
-    plan: {...},
-    feedback: 'Add a broadcast step after creating the event',
-    user_input: 'Create event and add attendees'
-  });
-  ```
+- `provide_missing_fields`: Provide additional required information
 
-- `provide_multiple_requests_missing_fields`: Provide missing fields during plan execution
-  ```javascript
-  socket.emit('provide_multiple_requests_missing_fields', {
-    fields: { organization: 'my-org', owner: 'user123' },
-    current_params: {...},
-    matched_api: {...},
-    step_number: 2,
-    plan: {...},
-    user_input: 'Create event and add attendees',
-    previous_results: {...},
-    completed_steps: [...]
-  });
-  ```
+### Agent to Client Events
 
-#### Server to Client Events
-
-- `status`: Status updates during processing
-  ```javascript
-  socket.on('status', (data) => {
-    console.log(data.message); // Status message
-    console.log(data.status);  // 'connected', 'processing', 'searching', etc.
-  });
-  ```
-
-- `missing_fields`: When required fields are missing
-  ```javascript
-  socket.on('missing_fields', (data) => {
-    console.log(data.missing_fields); // Array of missing field names
-    console.log(data.current_params); // Current parameters
-    console.log(data.matched_api);    // Matched API details
-  });
-  ```
-
-- `api_response`: Final API call result
-  ```javascript
-  socket.on('api_response', (data) => {
-    console.log(data.action);      // Action description
-    console.log(data.api_path);    // API endpoint
-    console.log(data.method);      // HTTP method
-    console.log(data.payload);     // Request payload
-    console.log(data.curl_command); // Generated curl command
-  });
-  ```
-
-- `error`: Error messages
-  ```javascript
-  socket.on('error', (data) => {
-    console.log(data.message); // Error message
-  });
-  ```
-
-- `execution_plan`: Generated execution plan for multiple requests
-  ```javascript
-  socket.on('execution_plan', (data) => {
-    console.log(data.plan);        // Execution plan object
-    console.log(data.user_input);  // Original user input
-    console.log(data.status);      // 'pending_approval'
-  });
-  ```
-
-- `step_completed`: Real-time updates for each step execution
-  ```javascript
-  socket.on('step_completed', (data) => {
-    console.log(data.step_number);  // Step number
-    console.log(data.description);  // Step description
-    console.log(data.status);       // 'success' or 'failed'
-    console.log(data.result);       // Step result data
-  });
-  ```
-
+- `status`: Real-time status updates during processing
+- `missing_fields`: When additional information is needed
+- `api_response`: Results of completed actions
+- `execution_plan`: Generated execution plan for complex workflows
+- `step_completed`: Progress updates for each step
 - `multiple_requests_complete`: Final results of all steps
-  ```javascript
-  socket.on('multiple_requests_complete', (data) => {
-    console.log(data.results);      // Complete execution results
-    console.log(data.plan);         // Original execution plan
-    console.log(data.status);       // 'completed'
-  });
-  ```
-
-- `multiple_requests_missing_fields`: Missing fields during plan execution
-  ```javascript
-  socket.on('multiple_requests_missing_fields', (data) => {
-    console.log(data.step_number);      // Current step number
-    console.log(data.step_description); // Step description
-    console.log(data.missing_fields);   // Array of missing field names
-    console.log(data.current_params);   // Current parameters
-    console.log(data.matched_api);      // Matched API details
-    console.log(data.plan);             // Original execution plan
-    console.log(data.previous_results); // Results from previous steps
-  });
-  ```
-
-## Architecture
-
-### Components
-
-1. **WebSocket Server** (`websocket_server.py`): Flask-SocketIO server handling real-time communication
-2. **API Requester** (`api_requester.py`): Core logic for API matching and parameter generation
-3. **Frontend** (`templates/index.html`): Modern, responsive web interface
-4. **Semantic Search** (`get_top_apis.py`): Vector search for finding relevant APIs
-
-### Flow
-
-#### Single Request Flow
-1. **User Input**: User enters natural language request
-2. **Query Enhancement**: Claude extracts action, data, and details
-3. **API Matching**: Semantic search finds relevant API endpoints
-4. **Parameter Generation**: Claude generates API parameters from user input
-5. **Missing Fields**: If required fields are missing, prompt user
-6. **Final Response**: Generate complete API call with curl command
-
-#### Multiple Requests Flow
-1. **Complex User Input**: User enters multi-step request
-2. **Plan Generation**: Claude creates execution plan with sequential steps
-3. **Plan Review**: User reviews and can modify the plan
-4. **Step Execution**: Execute each step sequentially with context from previous steps
-5. **Real-time Updates**: Show progress for each step execution
-6. **Final Results**: Display comprehensive results from all steps
 
 ## Configuration
 
 ### API Configuration
 
-Set the following environment variables for API calls:
+Set your application's API credentials:
 
 ```bash
-# API Configuration
 API_KEY=your_api_key_here
 API_HOST=https://your-api-domain.com
 ```
 
-The system will automatically use these values when making API calls during plan execution.
+### AI Model Configuration
 
-### Model Configuration
-
-You can modify the Claude model and parameters in `websocket_server.py`:
+You can customize the AI model and parameters in `server.py`:
 
 ```python
 "model": "claude-3-5-sonnet-20241022",  # Change model as needed
 "max_tokens": 1024,                     # Adjust token limit
 ```
 
-## Error Handling
-
-The system handles various error scenarios:
-
-- **Missing API Key**: Prompts user to set environment variable
-- **Invalid Schema**: Shows clear error message
-- **Network Issues**: Graceful degradation with retry logic
-- **Missing Fields**: Interactive collection of required information
-- **Invalid Responses**: Fallback to error messages
-
 ## Development
 
-### Adding New Features
+### Adding New Capabilities
 
-1. **New API Endpoints**: Add to `schema.json`
-2. **Custom Prompts**: Modify `build_prompt()` in `api_requester.py`
+1. **New API Endpoints**: Add to your `schema.json` file
+2. **Custom Prompts**: Modify prompts in the service files
 3. **UI Enhancements**: Update `templates/index.html`
-4. **WebSocket Events**: Add new event handlers in `websocket_server.py`
+4. **New Event Handlers**: Add handlers in `server.py`
 
-### Testing
+### Architecture Overview
 
-```bash
-# Test the WebSocket server
-python websocket_server.py
-
-# Test with curl
-curl -X POST http://localhost:5000/api_request \
-  -H "Content-Type: application/json" \
-  -d '{"query": "Create an event for tomorrow"}'
-
-# Test multiple requests functionality
-python test_multiple_requests.py
+```
+app_interaction_agent/
+├── server.py (main WebSocket server)
+├── handlers.py (single action handlers)
+└── services/
+    ├── single_request.py (single action service)
+    ├── multiple_requests.py (complex workflow service)
+    ├── search.py (API search and matching)
+    └── visualization.py (data visualization)
 ```
 
-#### Multiple Requests Testing
+## Error Handling
 
-The `test_multiple_requests.py` script tests all aspects of the multiple requests functionality:
+The agent handles various scenarios gracefully:
 
-- **Execution Plan Generation**: Tests creating plans for complex requests
-- **Plan Modification**: Tests modifying plans based on user feedback
-- **Context Enhancement**: Tests enhancing requests with previous step results
-- **Prompt Building**: Tests building prompts with context from previous steps
-
-Run the test to verify everything works correctly:
-
-```bash
-python test_multiple_requests.py
-```
+- **Missing Information**: Prompts for required details
+- **API Errors**: Provides clear error messages and suggestions
+- **Network Issues**: Graceful degradation with retry logic
+- **Invalid Requests**: Helpful feedback for unclear requests
 
 ## Troubleshooting
 
 ### Common Issues
 
 1. **"CLAUDE_API_KEY not set"**: Ensure your `.env` file contains the API key
-2. **"schema.json not found"**: Verify the schema file is in the project directory
-3. **WebSocket connection failed**: Check if the server is running on the correct port
+2. **"schema.json not found"**: Verify the API documentation file is present
+3. **WebSocket connection failed**: Check if the server is running on port 8010
 4. **Import errors**: Install all dependencies with `pip install -r requirements.txt`
 
 ### Logs
 
-The server provides detailed logging for debugging:
-
-- Connection/disconnection events
-- API matching results
-- Claude API responses
+The agent provides detailed logging for debugging:
+- Connection events
+- Action matching results
+- AI responses
 - Error details
 
 ## License
