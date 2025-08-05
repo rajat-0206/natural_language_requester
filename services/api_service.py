@@ -3,7 +3,8 @@ API Search Service - Handles API search and request processing.
 """
 
 import json
-from flask_socketio import emit
+from builders.api_response import APIResponseBuilder
+from models.api_response import ApiResponse, ApiResponseStatus
 from utils.index import (
     build_index, 
     load_cached_index, 
@@ -26,9 +27,11 @@ from utils import (
     find_missing_fields_nested,
     update_nested_dict
 )
-from utils.prompts import BUILD_PROMPT, BUILD_PROMPT_WITH_CONTEXT, ENHANCE_REQUEST_WITH_CONTEXT
+from utils.prompts import BUILD_API_PAYLOAD_PROMPT, BUILD_CONTEXT_RICH_API_PAYLOAD_PROMPT, ENHANCE_REQUEST_WITH_CONTEXT
+from models.step_result import StepResult
+from typing import Dict
 
-class APISearchService:
+class APIService:
     """Service for handling API search and request processing."""
     
     def __init__(self, search_model="faiss"):
@@ -73,13 +76,13 @@ class APISearchService:
             raise ValueError(f"Unknown search model: {self.search_model}")
         return True
     
-    def build_prompt(self, user_input, api_path, api_method, api_parameters, api_request_body):
+    def _generate_api_payload(self, user_input, api_path, api_method, api_parameters, api_request_body):
         """
         Builds a prompt to guide the language model in filling API details.
         """
         current_time = get_current_time_for_prompt()
 
-        return BUILD_PROMPT.format(
+        return BUILD_API_PAYLOAD_PROMPT.format(
             current_time=current_time,
             api_path=api_path,
             api_method=api_method,
@@ -102,7 +105,7 @@ Use the information from previous steps to fill in the current request.
 For example, if a previous step created an event with ID "123", use that ID in the current request.
 """
 
-        return BUILD_PROMPT_WITH_CONTEXT.format(
+        return BUILD_CONTEXT_RICH_API_PAYLOAD_PROMPT.format(
             current_time=current_time,
             context_info=context_info,
             api_path=api_path,
@@ -138,23 +141,30 @@ For example, if a previous step created an event with ID "123", use that ID in t
 
         return matched_api
     
-    def process_api_request(self, user_input):
+    def process_api_request(self, user_input) -> ApiResponse:
         """
         Process a single API request using the same logic as handle_api_request.
         Returns the result without emitting WebSocket events.
         """
         try:
             if not user_input:
-                return {'error': 'No query provided'}
+                return APIResponseBuilder.build_error_response(
+                    error='No query provided',
+                    status_code=400,
+                    status='failed',
+                    action=None,
+                    api_path=None,
+                    method=None,
+                    payload=None
+                )
             
             print(f"Processing API request: {user_input}")
             
             # Search for matching API
             matched_api = self.search_api(user_input)
             print("Matched API: ", matched_api["method"], matched_api["path"])
-            emit('status', {'message': f'Found API: {matched_api["path"]}', 'status': 'found_api'})
             
-            prompt = self.build_prompt(
+            prompt = self._generate_api_payload(
                 user_input, 
                 api_path=matched_api["path"], 
                 api_method=matched_api["method"], 
@@ -167,27 +177,27 @@ For example, if a previous step created an event with ID "123", use that ID in t
             if matched_api["method"] == "GET":
                 api, params, missing_fields = handle_get_request_params(api, params)
                 if missing_fields:
-                    return {
-                        'missing_fields': missing_fields,
-                        'current_params': params,
-                        'matched_api': api,
-                        'request_method': matched_api['method'],
-                        'action': action,
-                        'user_input': user_input
-                    }
+                    return APIResponseBuilder.build_missing_fields_response(
+                        missing_fields=missing_fields,
+                        current_params=params,
+                        matched_api=api,
+                        request_method=matched_api['method'],
+                        action=action,
+                        user_input=user_input
+                    )
 
             if action and action != 'more_info_needed':
                 # Check if there are any required fields missing (including nested ones)
                 missing_fields = find_missing_fields_nested(params)
                 if missing_fields:
-                    return {
-                        'missing_fields': missing_fields,
-                        'current_params': params,
-                        'matched_api': api,
-                        'request_method': matched_api['method'],
-                        'action': action,
-                        'user_input': user_input
-                    }
+                    return APIResponseBuilder.build_missing_fields_response(
+                        missing_fields=missing_fields,
+                        current_params=params,
+                        matched_api=api,
+                        request_method=matched_api['method'],
+                        action=action,
+                        user_input=user_input
+                    )
                 
                 # Make the API call
                 sanitized_path = sanitize_api_url(api)
@@ -200,41 +210,63 @@ For example, if a previous step created an event with ID "123", use that ID in t
                 )
                 
                 if status_code > 299:
-                    return {
-                        'error': 'API call failed',
-                        'status': 'failed',
-                        'action': action,
-                        'api_path': api,
-                        'method': matched_api['method'],
-                        'payload': sanitized_params
-                    }
+                    return APIResponseBuilder.build_error_response(
+                        error='API call failed',
+                        status_code=status_code,
+                        status='failed',
+                        action=action,
+                        api_path=api,
+                        method=matched_api['method'],
+                        payload=sanitized_params
+                    )
                 
-                return {
-                    'action': action,
-                    'api_path': api,
-                    'method': matched_api['method'],
-                    'payload': sanitized_params,
-                    'response': response_data,
-                    'status_code': status_code,
-                    'status': 'success'
-                }
+                
+                return APIResponseBuilder.build_success_response(
+                    action=action,
+                    api_path=api,
+                    method=matched_api['method'],
+                    payload=sanitized_params,
+                    response=response_data,
+                    status_code=status_code,
+                    status='success'
+                )
                 
             elif action == 'more_info_needed':
-                return {
-                    'error': f'More information needed: {params.get("text", "No details provided.")}'
-                }
+                return APIResponseBuilder.build_error_response(
+                    error=f'More information needed: {params.get("text", "No details provided.")}',
+                    status_code=400,
+                    status='failed',
+                    action=action,
+                    api_path=api,
+                    method=matched_api['method'],
+                    payload=sanitized_params
+                )
             else:
-                return {
-                    'error': "I couldn't determine the correct action. Please try rephrasing your request."
-                }
+                return APIResponseBuilder.build_error_response(
+                    error="I couldn't determine the correct action. Please try rephrasing your request.",
+                    status_code=400,
+                    status='failed',
+                    action=action,
+                    api_path=api,
+                    method=matched_api['method'],
+                    payload=sanitized_params
+                )
                 
         except Exception as e:
             print(f"Error processing API request: {e}")
             import traceback
             print(traceback.format_exc())
-            return {'error': f'An error occurred: {str(e)}'}
+            return APIResponseBuilder.build_error_response(
+                error=f'An error occurred: {str(e)}',
+                status_code=500,
+                status='failed',
+                action=action,
+                api_path=api,
+                method=matched_api['method'],
+                payload=sanitized_params
+            )
     
-    def enhance_request_with_context(self, current_step_description, previous_results, original_user_input):
+    def enhance_request_with_context(self, current_step_description: str, previous_results: Dict[str, ApiResponse], original_user_input: str) -> str:
         """Enhance the API request with context from previous results."""
 
         enhanced_request = f'''
@@ -252,8 +284,8 @@ For example, if a previous step created an event with ID "123", use that ID in t
         # Extract useful information from previous results
         context_info = []
         for key, result in previous_results.items():
-            if isinstance(result, dict) and result.get('status') == 'success':
-                response_data = result.get('response', {})
+            if isinstance(result, ApiResponse) and result.status == ApiResponseStatus.SUCCESS:
+                response_data = result.response
                 if isinstance(response_data, dict):
                     # Extract common fields that might be useful
                     if 'id' in response_data:

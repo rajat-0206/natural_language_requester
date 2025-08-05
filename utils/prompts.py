@@ -2,7 +2,7 @@
 
 # --- SEARCH SERVICE PROMPTS ---
 
-BUILD_PROMPT = """
+BUILD_API_PAYLOAD_PROMPT = """
 You are an expert AI assistant that fills in API request details based on user input.
 Your task is to analyze the user's request and the matched API endpoint to generate a valid JSON payload.
 
@@ -64,7 +64,7 @@ Response: {{
 User: {user_input}
 Response:"""
 
-BUILD_PROMPT_WITH_CONTEXT = """
+BUILD_CONTEXT_RICH_API_PAYLOAD_PROMPT = """
 You are an expert AI assistant that fills in API request details based on user input and context from previous steps.
 Your task is to analyze the user's request and the matched API endpoint to generate a valid JSON payload.
 
@@ -129,7 +129,7 @@ For example:
 Return only the enhanced request text, no additional formatting or explanations.
 """
 
-GENERATE_EXECUTION_PLAN = """
+GENERATE_EXECUTION_PLAN_PROMPT = """
 You are an expert at breaking down complex API requests into sequential steps.
 Given the user's request, create a detailed execution plan with multiple API calls.
 The plan should only contain API execution steps. Any data manipulation will be done at later step when we call the api.
@@ -168,7 +168,7 @@ ONLY RETURN  VALID JSON OBJECT. IT SHOULD BE JSON PARSABLE.
 - "Create event, add speakers, and send invitations" → 3 steps: create event, add speakers, send invitations
 """
 
-MODIFY_EXECUTION_PLAN = """
+MODIFY_EXECUTION_PLAN_PROMPT = """
 You are modifying an execution plan based on user feedback.
 
 **ORIGINAL USER REQUEST:** {user_input}
