@@ -1,7 +1,7 @@
 from typing import List, Dict, Any
-from api_requester.models.step_result import StepResult
-from api_requester.models.execution_plan import ExecutionPlan
-from api_requester.models.missing_fields_data import MissingFieldsData
+from models.step_result import StepResult
+from models.execution_plan import ExecutionPlan
+from models.missing_fields_data import MissingFieldsData
 
 class MissingFieldsDataBuilder:
 

@@ -1,24 +1,20 @@
 from flask import Flask, render_template, request
 from flask_socketio import SocketIO, emit
 import json
-import subprocess
 import traceback
-import time
 
-from api_requester.services.api_service import APIService
-from api_requester.services.executor_service import ExecutorService
-from api_requester.services.visualization_service import VisualizationService
-from api_requester.services.socket_response_service import WebSocketResponseService
-from api_requester.models.execution_plan import ExecutionPlan
-from api_requester.builders.execution_plan import ExecutionPlanBuilder
-from api_requester.models.execution_result import Execution, ExecutionStatus
+from services.api_service import APIService
+from services.executor_service import ExecutorService
+from services.visualization_service import VisualizationService
+from services.socket_response_service import WebSocketResponseService
+from models.execution_plan import ExecutionPlan
+from builders.execution_plan import ExecutionPlanBuilder
+from models.execution_result import ExecutionResult, ExecutionStatus
 from utils import (
     sanitize_api_url,
     sanitize_api_params,
     make_api_call,
-    suggest_next_best_item,
     update_nested_dict,
-    extract_action_data,
 )
 
 app = Flask(__name__)
@@ -56,79 +52,6 @@ def handle_connect():
 def handle_disconnect():
     """Handle client disconnection."""
     print(f"Client disconnected: {request.sid}")
-
-@socketio.on('api_request')
-def handle_api_request(data):
-    """Handle API request from frontend."""
-    try:
-        user_input = data.get('query', '').strip()
-        
-        if not user_input:
-            websocket_response_service.emit_error('No query provided')
-            return
-        
-        print(f"Received request: {user_input}")
-        websocket_response_service.emit_processing_status()
-        
-        # Extract action/data/details using Claude
-        extracted = extract_action_data(user_input)
-        print("Improved user query is", extracted)
-        
-        if extracted:
-            search_text = f"{extracted.get('action', '')} {extracted.get('data', '')}".strip()
-            if not search_text:
-                search_text = user_input
-        else:
-            search_text = user_input  # fallback
-
-        websocket_response_service.emit_searching_status()
-
-        # Search for matching API
-        matched_api = search_service.search_api(user_input)
-        print("Matched API: ", matched_api["method"], matched_api["path"])
-        websocket_response_service.emit_found_api_status(matched_api["path"])
-        
-        websocket_response_service.emit_generating_status()
-        
-        # Use the search service to process the request
-        result = search_service.process_api_request(user_input)
-        
-        if result.get('missing_fields'):
-            websocket_response_service.emit_missing_fields({
-                'message': 'Some required fields are missing',
-                'missing_fields': result['missing_fields'],
-                'current_params': result['current_params'],
-                'matched_api': result['matched_api'],
-                'request_method': result['request_method'],
-                'action': result['action'],
-                'user_input': result['user_input']
-            })
-            return
-        
-        if result.get('error'):
-            websocket_response_service.emit_error(result['error'])
-            return
-        
-        if result.get('status') == 'success':
-            final_response = get_final_response(
-                result['action'], 
-                result['api_path'], 
-                result['method'], 
-                result['payload']
-            )
-            websocket_response_service.emit_api_response(final_response)
-
-            time.sleep(1)
-            next_best_items = suggest_next_best_item(result['action'], user_input)
-            if next_best_items:
-                websocket_response_service.emit_next_best_items(next_best_items)
-        else:
-            websocket_response_service.emit_error('Failed to process request')
-            
-    except Exception as e:
-        print(f"Error processing request: {e}")
-        print(traceback.format_exc())
-        websocket_response_service.emit_error(f'An error occurred: {str(e)}')
 
 @socketio.on('multiple_requests')
 def handle_multiple_requests(data):
@@ -171,9 +94,8 @@ def handle_approve_execution_plan(data):
             return
         
         websocket_response_service.emit_executing_status()
-        
-        # Execute the plan step by step with WebSocket communication
-        execution_result: Execution = multiple_requests_service.execute_plan_steps(
+
+        execution_result: ExecutionResult = multiple_requests_service.execute_plan_steps(
             plan, user_input, websocket_response_service
         )
         
@@ -309,175 +231,6 @@ def handle_multiple_requests_missing_fields(data):
         print(f"Error handling multiple requests missing fields: {e}")
         print(traceback.format_exc())
         websocket_response_service.emit_error(f'An error occurred: {str(e)}')
-
-@socketio.on('visualize_search')
-def handle_visualize_search(data):
-    """Handle search visualization request."""
-    try:
-        query = data.get('query', '').strip()
-        use_pca = data.get('use_pca', False)
-        
-        if not query:
-            websocket_response_service.emit_error('No query provided for visualization')
-            return
-        
-        print(f"Visualizing search for: {query}")
-        websocket_response_service.emit_visualizing_status()
-        
-        # Get search analysis with visualization
-        analysis = visualization_service.get_search_analysis(query, top_k=5)
-        
-        if analysis.get('error'):
-            websocket_response_service.emit_error(analysis['error'])
-            return
-        
-        # Send visualization results
-        websocket_response_service.emit_visualization_results(query, analysis)
-        
-    except Exception as e:
-        print(f"Error generating visualization: {e}")
-        print(traceback.format_exc())
-        websocket_response_service.emit_error(f'An error occurred: {str(e)}')
-
-@socketio.on('provide_missing_fields')
-def handle_missing_fields(data):
-    """Handle missing fields provided by user."""
-    try:
-        provided_fields = data.get('fields', {})
-        current_params = data.get('current_params', {})
-        matched_api = data.get('matched_api', {})
-        request_method = data.get('request_method', "GET")
-        action = data.get('action', "")
-        user_input = data.get('user_input', "")
-
-        print("request method", request_method)
-        print("matched api", matched_api)
-        print("current params", current_params)
-        print("provided fields", provided_fields)
-        print("action", action)
-        print("user input", user_input)
-        
-        # Update params with provided fields (handling nested structures)
-        updated_params = update_nested_dict(current_params, provided_fields)
-
-        if request_method == "GET":
-            api = matched_api + "?" + "&".join([f"{key}={value}" for key, value in updated_params.items()])
-        else:
-            api = matched_api
-        
-        # Make the API call
-        sanitized_path = sanitize_api_url(api)
-        sanitized_params = json.loads(sanitize_api_params(updated_params))
-        
-        response_data, status_code = make_api_call(
-            request_method, 
-            sanitized_path, 
-            sanitized_params
-        )
-        
-        if status_code > 299:
-            websocket_response_service.emit_error(f'API failed: {status_code}: {response_data}')
-            return
-        
-        # Send final response
-        final_response = get_final_response(action, sanitized_path, request_method, sanitized_params)
-        websocket_response_service.emit_api_response(final_response)
-        time.sleep(1)
-        next_best_items = suggest_next_best_item(action, user_input)
-        if next_best_items:
-            websocket_response_service.emit_next_best_items(next_best_items)
-        
-    except Exception as e:
-        print(f"Error handling missing fields: {e}")
-        print(traceback.format_exc())
-        websocket_response_service.emit_error(f'An error occurred: {str(e)}')
-
-@socketio.on('make_api_call')
-def handle_make_api_call(data):
-    '''
-    Make an API call to the API server
-    using requests module
-    '''
-    try:
-        response_data, status_code = make_api_call(
-            data['method'], 
-            data['api_path'], 
-            data.get('payload')
-        )
-        if status_code < 300:
-            websocket_response_service.emit_api_response({
-                'response': response_data,
-                'status': 'success'
-            })
-        else:
-            websocket_response_service.emit_error(f'Failed to make API call: {status_code}: {response_data}')
-    except Exception as e:
-        print(f"Error making API call: {e}")
-        websocket_response_service.emit_error(f'An error occurred: {str(e)}')
-
-@socketio.on('upload_csv')
-def handle_upload_csv(data):
-    '''
-    Upload a csv file to the server
-    '''
-    try:
-        csv_content = data.get('csv_file')
-        event_id = data.get('event_id')
-
-        print("Uploading CSV to event", event_id)
-
-        if not csv_content:
-            websocket_response_service.emit_upload_error('No CSV content provided')
-            return
-
-        if not event_id:
-            websocket_response_service.emit_upload_error('No event ID provided')
-            return
-
-        # Create a temporary CSV file
-        import tempfile
-        import os
-        
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as temp_file:
-            temp_file.write(csv_content)
-            temp_file_path = temp_file.name
-
-        try:
-            print("Calling csv_uploader.js")
-            # Use subprocess to call the csv_uploader.js file
-            result = subprocess.run(
-                ['node', 'csv_uploader.js', temp_file_path, event_id], 
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True, 
-                timeout=30
-            )
-            print("Result", result)
-            
-            # Clean up the temporary file
-            os.unlink(temp_file_path)
-            
-            if result.returncode == 0:
-                websocket_response_service.emit_upload_success({
-                    'message': f'CSV uploaded successfully for event {event_id}!',
-                    'output': result.stdout
-                })
-            else:
-                websocket_response_service.emit_upload_error(f'Failed to upload CSV: {result.stderr}')
-                
-        except subprocess.TimeoutExpired:
-            # Clean up the temporary file
-            os.unlink(temp_file_path)
-            websocket_response_service.emit_upload_error('Upload timed out. Please try again.')
-        except FileNotFoundError:
-            # Clean up the temporary file
-            os.unlink(temp_file_path)
-            websocket_response_service.emit_upload_error('csv_uploader.js not found. Please ensure the file exists.')
-            
-    except Exception as e:
-        print(f"Error uploading CSV: {e}")
-        print(traceback.format_exc())
-        websocket_response_service.emit_upload_error(f'An error occurred: {str(e)}')
 
 def get_final_response(action, api_path, method, payload):
     return {

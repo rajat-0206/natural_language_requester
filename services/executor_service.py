@@ -7,11 +7,11 @@ import traceback
 from typing import Dict, Any, List, Optional
 from utils import call_model, extract_json_from_response
 from utils.prompts import GENERATE_EXECUTION_PLAN_PROMPT, MODIFY_EXECUTION_PLAN_PROMPT
-from api_requester.services.api_service import APIService
+from services.api_service import APIService
 from builders.step_response import StepResponseBuilder
 from builders.missing_fields_data import MissingFieldsDataBuilder
 from builders.execution_result import ExecutionResultBuilder
-from models.execution_result import Execution, ExecutionStatus
+from models.execution_result import ExecutionResult, ExecutionStatus
 from models.step_result import StepResult, StepResultStatus
 from models.execution_plan import ExecutionPlan, ExecutionStep
 from builders.execution_plan import ExecutionPlanBuilder
@@ -82,7 +82,7 @@ class ExecutorService:
     
     def execute_plan_steps(self, plan: ExecutionPlan, user_input: str, websocket_service: WebSocketResponseService, 
                           start_from_step: int = 1, previous_results: Optional[Dict[str, ApiResponse]] = None, 
-                          completed_steps: Optional[List[StepResult]] = None) -> Execution:
+                          completed_steps: Optional[List[StepResult]] = None) -> ExecutionResult:
         """Execute the steps in the plan sequentially with WebSocket communication."""
         if previous_results is None:
             previous_results = {}
@@ -126,14 +126,7 @@ class ExecutorService:
                 completed_steps.append(step_result)
                 
                 # Send step completion update
-                websocket_service.emit_step_completed({
-                    'step_number': step.step_number,
-                    'description': step.description,
-                    'api_description': step.api_description,
-                    'result': step_result.api_response,
-                    'status': step_result.status,
-                    'error': step_result.error
-                })
+                websocket_service.emit_step_completed(step_result)
                 
             except Exception as e:
                 print(f"Error executing step {step.step_number}: {e}")

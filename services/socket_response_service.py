@@ -1,9 +1,9 @@
 from typing import Dict, Any, Optional, List
 
-from api_requester.models.execution_plan import ExecutionPlan
-from api_requester.models.execution_result import Execution
-from api_requester.models.step_result import StepResult
-from api_requester.models.missing_fields_data import MissingFieldsData
+from models.execution_plan import ExecutionPlan
+from models.execution_result import ExecutionResult
+from models.step_result import StepResult
+from models.missing_fields_data import MissingFieldsData
 
 
 class WebSocketResponseService:
@@ -39,7 +39,7 @@ class WebSocketResponseService:
     def emit_execution_plan(self, plan: ExecutionPlan, user_input: str, status: str = 'pending_approval'):
         """Emit execution plan."""
         self.socketio.emit('execution_plan', {
-            'plan': plan.to_dict(),
+            'plan': plan.to_json(),
             'user_input': user_input,
             'status': status
         })
@@ -64,10 +64,10 @@ class WebSocketResponseService:
         """Emit step completion status."""
         self.socketio.emit('step_completed', step_data.to_dict())
     
-    def emit_multiple_requests_complete(self, results: Execution, plan: ExecutionPlan):
+    def emit_multiple_requests_complete(self, results: ExecutionResult, plan: ExecutionPlan):
         """Emit multiple requests completion."""
         self.socketio.emit('multiple_requests_complete', {
-            'results': results,
+            'results': results.to_dict(),
             'plan': plan,
             'status': 'completed'
         })

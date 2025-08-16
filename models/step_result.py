@@ -14,6 +14,16 @@ class StepResult(DataModel):
     error: Optional[str] = None
 
 
+    def to_dict(self):
+        return {
+            'step_number': self.step_number,
+            'description': self.step_description,
+            'api_description': self.api_description,
+            'result': self.api_response,
+            'status': self.status,
+            'error': self.error
+        }
+
 class StepResultStatus(Enum):
     SUCCESS = 'success'
     FAILED = 'failed'

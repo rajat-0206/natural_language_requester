@@ -12,7 +12,7 @@ class ExecutionStatus(Enum):
 
 
 @dataclass
-class Execution(DataModel):
+class ExecutionResult(DataModel):
     plan_description: str
     final_result: Optional[str] = None
     api_description: Optional[str] = None

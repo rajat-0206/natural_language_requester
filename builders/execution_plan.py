@@ -12,8 +12,7 @@ class ExecutionPlanBuilder:
         return ExecutionPlan(
             description=description,
             steps=steps,
-            final_result=final_result,
-            api_description=api_description
+            final_result=final_result
         )
     
     @staticmethod
@@ -32,9 +31,18 @@ class ExecutionPlanBuilder:
         steps = plan.get('steps', [])
         final_result = plan.get('final_result', '')
         execution_steps = []
-        for step_number, step in enumerate(steps):
-            execution_steps.append(ExecutionPlanBuilder.build_execution_step(step_number, step.get('description', ''), step.get('api_description', ''), step.get('result_key', '')))
-        return ExecutionPlanBuilder.build_execution_plan(plan_description, execution_steps, final_result)
+        for step_number, step in enumerate(steps):  
+            execution_steps.append(ExecutionStep(
+                step_number=step_number,
+                description=step.get('description', ''),
+                api_description=step.get('api_description', ''),
+                result_key=step.get('result_key', '')
+            ))
+        return ExecutionPlan(
+            description=plan_description,
+            steps=execution_steps,
+            final_result=final_result
+        )
 
     
     

@@ -13,7 +13,7 @@ load_dotenv()
 API_SCHEMA = None
 print_raw_response = True
 CLAUDE_API_KEY = os.getenv('CLAUDE_API_KEY')
-MODEL_TO_USE = "CLAUDE"
+MODEL_TO_USE = "OLLAMA"
 CLAUDE_API_HOST = 'https://api.anthropic.com/v1/messages'
 
 NEXT_BEST_SUGGESTIONS = {

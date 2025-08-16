@@ -11,6 +11,7 @@ class DataModel(ABC):
         return cls(**data)
     
     def to_json(self):
+        print("dict", self.to_dict())
         return json.dumps(self.to_dict(), indent=2)
     
     def __str__(self):
